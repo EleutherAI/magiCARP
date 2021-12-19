@@ -39,7 +39,7 @@ from carp.pytorch.checkpointing.convert_v1_to_v2 import *
 def get_converter(origin_name, destination_name):
     return _CONVERTERS[origin_name.lower()][destination_name.lower()]
 
-def get_converters_names():
+def get_converter_names():
     converters = list()
     for k,v in _CONVERTERS.items():
         for u in v.keys():

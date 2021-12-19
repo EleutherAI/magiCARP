@@ -18,9 +18,10 @@ if __name__ == "__main__":
 
     # do not actually run the conversion, just return the list of converters
     if args.get_converters:
+        print("FORMAT: Origin, Desination")
         print("Available converters are:")
-        print("FORMAT: Origin, Desination") 
-        print("\n".join(get_converters_names()))
+        print("***************") 
+        print("\n".join(get_converter_names()))
     else:
         origin_type = args.origin_type.lower()
         destination_type = args.destination_type.lower()
