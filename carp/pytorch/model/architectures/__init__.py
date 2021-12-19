@@ -160,6 +160,7 @@ class Projection(nn.Module):
 
 from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
+from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
