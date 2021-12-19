@@ -164,5 +164,5 @@ from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
 
-def get_converters_names():
+def get_architecture_names():
     return _ARCHITECTURES.keys()

@@ -1,10 +1,12 @@
 from argparse import ArgumentParser
 from carp.clock import Clock
 from carp.configs import CARPConfig, TrainConfig
-from carp.pytorch.model.architectures import get_architecture
+
+from carp.pytorch.model.architectures import get_architecture, get_architecture_names
+from carp.pytorch.model.encoders import get_encoder_names
 from carp.util import get_scheduling_func
 from carp.pytorch.dataset import CarpDataset, tokenizer_factory
-from carp.pytorch.model.architectures import get_architecture
+
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, random_split, RandomSampler, Subset
@@ -13,14 +15,16 @@ import wandb
 
 def get_arguments():
     parser = ArgumentParser()
-    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--data_path", type=str, required=False)
     parser.add_argument("--ckpt_path", type=str, required=False)
     parser.add_argument("--config_path", type=str, default="./base_config.yml")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--load_checkpoint", type=bool, default=False)
     parser.add_argument("--wandb_run_name", type=str)
-    parser.add_argument("--seed", type=float)
+    parser.add_argument("--seed", type=float, default=42)
     parser.add_argument("--type", type=str, default="CARP")
+    parser.add_argument("--get_architectures", action='store_true')
+    parser.add_argument("--get_encoders", action='store_true')
     return parser
 
 
@@ -43,9 +47,6 @@ def get_datasets(config, data_path, random_seed=None):
     carp = CarpDataset(config.dupe_protection, data_path)
     size = len(carp)
 
-    if random_seed is None:
-        random_seed = 42
-        
     seed = torch.manual_seed(random_seed)
     if config.eval_selection == 'random':
         splits = [size - config.validation_size, config.validation_size]
@@ -145,18 +146,30 @@ def param_count(model):
 if __name__ == "__main__":
     parser = get_arguments()
     args, _ = parser.parse_known_args()
-    config = CARPConfig.load_yaml(args.config_path)
-    train_config = config.train_job
-    model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path)
-    print("N Parameters: " + str(param_count(model)))
-    # Logging stuff
-    if train_config.do_log:
-        wandb.init(
-            name=args.wandb_run_name,
-            resume=False,
-            config=config.to_dict(),
-        )
-        wandb.config.update({'seed': args.seed})
-        wandb.watch(model)
-    dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
-    train(model, dataset, evalset, train_config, args)
+
+    if args.get_architectures:
+        print("FORMAT: Architecture") 
+        print("Available architectures are:")
+        print("***************")
+        print("\n".join(get_architecture_names()))
+    elif args.get_encoders:
+        print("FORMAT: Encoder")
+        print("Available encoders are:")
+        print("***************")
+        print("\n".join(get_encoder_names()))
+    else:
+        config = CARPConfig.load_yaml(args.config_path)
+        train_config = config.train_job
+        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path)
+        print("N Parameters: " + str(param_count(model)))
+        # Logging stuff
+        if train_config.do_log:
+            wandb.init(
+                name=args.wandb_run_name,
+                resume=False,
+                config=config.to_dict(),
+            )
+            wandb.config.update({'seed': args.seed})
+            wandb.watch(model)
+        dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
+        train(model, dataset, evalset, train_config, args)
