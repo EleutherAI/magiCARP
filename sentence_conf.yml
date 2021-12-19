@@ -1,0 +1,30 @@
+model:
+  latent_dim: 2048
+  proj_dropout: 0.1
+  linear_projection: false
+  model_path: "sentence-transformers/all-mpnet-base-v2"
+  model_arch: "roberta"
+  encoder_type: "MeanPoolEncoder"
+  grad_clip: -1.0
+  momentum: 0.4
+  device: "cuda"
+
+train_job:
+  n_ctx: 512
+  epochs: 10
+  batch_size: 2048
+  microbatch_size: 16
+  lr_ramp_steps: 400
+  lr_decay_steps: 3366
+  learning_rate_init: 0.0001
+  learning_rate_target: 0.000006
+  log_interval: 5
+  checkpoint_interval: 50
+  validate_interval: 50
+  use_half: false
+  do_log: true
+  validation_size: 1000
+  eval_selection: "final_n"
+  use_bucket: false
+  dupe_protection: true
+  hard_dupe_protection: false
