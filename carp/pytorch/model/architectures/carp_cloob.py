@@ -24,18 +24,18 @@ def infoLOOB_loss(x, y, labels, logit_scale):
     negatives = torch.mean(torch.logsumexp(arg_lse, dim=1))
     return (1/exp_logit_scale) * (positives + negatives), acc
 
-def hopfield_retrieval(image_features, text_features, scale_hopfield):
-    patterns_xx = hopfield(state_patterns=image_features, stored_patterns=image_features, scale_hopfield=scale_hopfield)
-    patterns_yy = hopfield(state_patterns=text_features, stored_patterns=text_features, scale_hopfield=scale_hopfield)
-    patterns_xy = hopfield(state_patterns=text_features, stored_patterns=image_features, scale_hopfield=scale_hopfield)
-    patterns_yx = hopfield(state_patterns=image_features, stored_patterns=text_features, scale_hopfield=scale_hopfield)
+def hopfield_retrieval(image_features, text_features, hopfield_scale):
+    patterns_xx = hopfield(state_patterns=image_features, stored_patterns=image_features, hopfield_scale=hopfield_scale)
+    patterns_yy = hopfield(state_patterns=text_features, stored_patterns=text_features, hopfield_scale=hopfield_scale)
+    patterns_xy = hopfield(state_patterns=text_features, stored_patterns=image_features, hopfield_scale=hopfield_scale)
+    patterns_yx = hopfield(state_patterns=image_features, stored_patterns=text_features, hopfield_scale=hopfield_scale)
     
     return patterns_xx, patterns_yy, patterns_xy, patterns_yx
 
 
-def hopfield(state_patterns, stored_patterns, scale_hopfield):
+def hopfield(state_patterns, stored_patterns, hopfield_scale):
     retrieved_patterns = stored_patterns.T @ nn.functional.softmax(
-        scale_hopfield * stored_patterns @ state_patterns.t(), dim=0)
+        hopfield_scale * stored_patterns @ state_patterns.t(), dim=0)
     # Column vectors -> dim=0 to normalize the column vectors
     retrieved_patterns = retrieved_patterns / retrieved_patterns.norm(dim=0, keepdim=True)
     return retrieved_patterns
@@ -63,7 +63,7 @@ class CARPCloob(ContrastiveModel):
             torch.ones([], device=self.config.device)
             * torch.tensor([1.155], device=self.config.device)
         )
-        self.scale_hopfield = nn.Parameter(
+        self.hopfield_scale = nn.Parameter(
             torch.ones([], device=self.config.device)
             * torch.tensor([1.155], device=self.config.device)
         )
@@ -73,13 +73,13 @@ class CARPCloob(ContrastiveModel):
 
     def cloob(self,image_features : TensorType[-1, "latent_dim"], \
         text_features : TensorType[-1, "latent_dim"])  -> Tuple[TensorType[(), float], TensorType[(), float]]:
-        p_xx, p_yy, p_xy, p_yx = hopfield_retrieval(image_features, text_features, self.scale_hopfield)
+        p_xx, p_yy, p_xy, p_yx = hopfield_retrieval(image_features, text_features, self.hopfield_scale)
         identity = torch.eye(p_xx.shape[1]) > 0.5
         i = identity.to(p_xx.device)
         loss_img, acc_i = infoLOOB_loss(p_xx.T, p_xy.T, i, logit_scale=self.logit_scale)
         loss_txt, acc_t = infoLOOB_loss(p_yy.T, p_yx.T, i, logit_scale=self.logit_scale)
 
-        return (loss_img + loss_txt).sum(), (acc_i + acc_t)/2
+        return (loss_img + loss_txt).sum(), (acc_i + acc_t) / p_xx.shape[1] / 2
 
     def train_step(
         self,
@@ -99,8 +99,10 @@ class CARPCloob(ContrastiveModel):
         rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
             (reviews[0][i], reviews[1][i]) for i in microbatch_inds
         ]
-        # Initially get all encodings without grad
-        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
+        
+        with torch.cuda.amp.autocast():
+            # Initially get all encodings without grad
+            pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 
         opt.zero_grad()
         # Encode passages in microbatches (with grad)
@@ -133,7 +135,8 @@ class CARPCloob(ContrastiveModel):
         scaler.step(opt)
         scaler.update()
         return {
-            "Loss/Contrastive": loss,
             "Loss/Train": loss,
             "Acc/Forward": forward_acc,
+            "Model/logit_scale": self.logit_scale.sum(),
+            "Model/hopfield_scale": self.hopfield_scale.sum(),
         }

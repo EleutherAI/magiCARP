@@ -86,7 +86,6 @@ class CARP(ContrastiveModel):
         scaler.step(opt)
         scaler.update()
         return {
-            "Loss/Contrastive": loss,
             "Loss/Train": loss,
             "Acc/Forward": forward_acc,
         }
