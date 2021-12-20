@@ -15,14 +15,13 @@ def infoLOOB_loss(x, y, labels, logit_scale):
     exp_logit_scale = logit_scale.exp()
     logits = x @ y.T * exp_logit_scale
 
-    acc = (torch.argmax(logits, dim=1) == labels).sum()
     positives = -torch.mean(torch.sum(logits * labels, dim=1))
 
     # For logsumexp the zero entries must be equal to a very large negative number
     large_neg = -1000.0
     arg_lse = logits * torch.logical_not(labels) + labels * large_neg
     negatives = torch.mean(torch.logsumexp(arg_lse, dim=1))
-    return (1/exp_logit_scale) * (positives + negatives), acc
+    return (1/exp_logit_scale) * (positives + negatives)
 
 def hopfield_retrieval(image_features, text_features, hopfield_scale):
     patterns_xx = hopfield(state_patterns=image_features, stored_patterns=image_features, hopfield_scale=hopfield_scale)
@@ -71,15 +70,24 @@ class CARPCloob(ContrastiveModel):
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
+    def clamp(self):
+        with torch.no_grad():
+            self.logit_scale.clamp(self.clamp_min, self.clamp_max)
+            self.hopfield_scale.clamp(self.clamp_min, self.clamp_max)
+            
     def cloob(self,image_features : TensorType[-1, "latent_dim"], \
-        text_features : TensorType[-1, "latent_dim"])  -> Tuple[TensorType[(), float], TensorType[(), float]]:
+        text_features : TensorType[-1, "latent_dim"])  -> TensorType[(), float]:
+        
+        image_features = F.normalize(image_features)
+        text_features = F.normalize(text_features)
+
         p_xx, p_yy, p_xy, p_yx = hopfield_retrieval(image_features, text_features, self.hopfield_scale)
         identity = torch.eye(p_xx.shape[1]) > 0.5
         i = identity.to(p_xx.device)
-        loss_img, acc_i = infoLOOB_loss(p_xx.T, p_xy.T, i, logit_scale=self.logit_scale)
-        loss_txt, acc_t = infoLOOB_loss(p_yy.T, p_yx.T, i, logit_scale=self.logit_scale)
+        loss_img = infoLOOB_loss(p_xx.T, p_xy.T, i, logit_scale=self.logit_scale)
+        loss_txt = infoLOOB_loss(p_yy.T, p_yx.T, i, logit_scale=self.logit_scale)
 
-        return (loss_img + loss_txt).sum(), (acc_i + acc_t) / p_xx.shape[1] / 2
+        return (loss_img + loss_txt).sum()
 
     def train_step(
         self,
@@ -100,9 +108,12 @@ class CARPCloob(ContrastiveModel):
             (reviews[0][i], reviews[1][i]) for i in microbatch_inds
         ]
         
-        with torch.cuda.amp.autocast():
-            # Initially get all encodings without grad
-            pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
+        
+        # Initially get all encodings without grad
+        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
+
+        #compute accuracy
+        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
 
         opt.zero_grad()
         # Encode passages in microbatches (with grad)
@@ -113,7 +124,7 @@ class CARPCloob(ContrastiveModel):
                 pass_tmp[index] = self.encode_passages(
                     passage.to(self.device), mask.to(self.device)
                 )
-                loss, forward_acc = self.cloob(torch.cat(pass_tmp), torch.cat(rev_encs))
+                loss = self.cloob(torch.cat(pass_tmp), torch.cat(rev_encs))
             
             scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
@@ -124,7 +135,7 @@ class CARPCloob(ContrastiveModel):
                 rev_tmp[index] = self.encode_reviews(
                     review.to(self.device), mask.to(self.device)
                 )  # grad _just_ at positions in `index`
-                loss, _ = self.cloob(torch.cat(pass_encs), torch.cat(rev_tmp))
+                loss = self.cloob(torch.cat(pass_encs), torch.cat(rev_tmp))
 
             scaler.scale(loss).backward()
         # Clipping

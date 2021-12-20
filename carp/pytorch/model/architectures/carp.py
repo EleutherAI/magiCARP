@@ -53,6 +53,9 @@ class CARP(ContrastiveModel):
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 
+        #compute accuracy
+        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
+
         opt.zero_grad()
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
@@ -62,7 +65,7 @@ class CARP(ContrastiveModel):
                 pass_tmp[index] = self.encode_passages(
                     passage.to(self.device), mask.to(self.device)
                 )
-                loss, forward_acc = self.contrastive_loss(
+                loss  = self.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(rev_encs)
                 )
             scaler.scale(loss).backward()
@@ -74,7 +77,7 @@ class CARP(ContrastiveModel):
                 rev_tmp[index] = self.encode_reviews(
                     review.to(self.device), mask.to(self.device)
                 )  # grad _just_ at positions in `index`
-                loss, _ = self.contrastive_loss(
+                loss = self.contrastive_loss(
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )
             scaler.scale(loss).backward()

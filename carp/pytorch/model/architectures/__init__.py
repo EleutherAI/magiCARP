@@ -42,9 +42,20 @@ class ContrastiveModel(nn.Module):
     def __init__(self):
         super().__init__()
         
+    def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
+        with torch.no_grad():
+            n = x.shape[0]
+            x = F.normalize(x)
+            y = F.normalize(y)
+            logits = x @ y.T * self.logit_scale.exp()
+            labels = torch.arange(n, device=self.device)
+            acc_i = (torch.argmax(logits, dim=1) == labels).sum()
+            acc_t = (torch.argmax(logits, dim=0) == labels).sum()
+        return (acc_i + acc_t) / n / 2
+
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
-    ) -> Tuple[TensorType[(), float], TensorType[(), float]]:
+    ) -> TensorType[(), float]:
         n = x.shape[0]
         x = F.normalize(x)
         y = F.normalize(y)
@@ -52,9 +63,7 @@ class ContrastiveModel(nn.Module):
         labels = torch.arange(n, device=self.device)
         loss_i = F.cross_entropy(logits, labels)
         loss_t = F.cross_entropy(logits.T, labels)
-        acc_i = (torch.argmax(logits, dim=1) == labels).sum()
-        acc_t = (torch.argmax(logits, dim=0) == labels).sum()
-        return (loss_i + loss_t) / 2, (acc_i + acc_t) / n / 2
+        return (loss_i + loss_t) / 2
         
     def clamp(self):
         with torch.no_grad():
@@ -135,7 +144,8 @@ class ContrastiveModel(nn.Module):
             reviews.append(r)
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
-            val_loss, val_acc = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
+            val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
+            val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
 
