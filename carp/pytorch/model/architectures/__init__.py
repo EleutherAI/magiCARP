@@ -41,6 +41,7 @@ class ContrastiveModel(nn.Module):
 
     def __init__(self):
         super().__init__()
+        
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
     ) -> Tuple[TensorType[(), float], TensorType[(), float]]:
