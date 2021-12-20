@@ -58,14 +58,11 @@ class CARPCloob(ContrastiveModel):
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
 
-        self.logit_scale = nn.Parameter(
-            torch.ones([], device=self.config.device)
-            * torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
-        )
-        self.hopfield_scale = nn.Parameter(
-            torch.ones([], device=self.config.device)
-            * torch.log(torch.tensor([8], device=self.config.device, requires_grad=False))
-        )
+        self.logit_scale = torch.ones([], device=self.config.device) *\
+            torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
+        
+        self.hopfield_scale = torch.ones([], device=self.config.device) *\
+            torch.log(torch.tensor([8], device=self.config.device, requires_grad=False))
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
