@@ -19,7 +19,7 @@ def get_arguments():
     parser.add_argument("--ckpt_path", type=str, required=False)
     parser.add_argument("--config_path", type=str, default="./base_config.yml")
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--load_checkpoint", type=bool, default=False)
+    parser.add_argument("--load_checkpoint", action='store_true')
     parser.add_argument("--wandb_run_name", type=str)
     parser.add_argument("--seed", type=float, default=42)
     parser.add_argument("--type", type=str, default="CARP")
@@ -37,6 +37,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
             model.load_state_dict(torch.load("./params.pt"))
         else:
             model.load_state_dict(torch.load(ckpt_path))
+        print("Checkpoint loaded!")
     model.cuda()
     if config.train_job.use_half:
         model.half()

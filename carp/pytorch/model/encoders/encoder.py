@@ -122,7 +122,7 @@ class DirectTextEncoder(BaseEncoder):
         # self.tokenizer.add_special_tokens({'pad_token':'[PAD]'})
         self.model.resize_token_embeddings(len(self.tokenizer))
 
-    def preprocess(string_batch: Iterable[str]) -> Iterable[str]:
+    def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
     def forward(self, x, mask=None, tokenize: bool = False):
