@@ -1,4 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Callable, Iterable, Tuple
+from transformers.tokenization_utils_base import BatchEncoding
+from typeguard import typechecked
+from torchtyping import TensorType
 
 
 def check_char(char):
@@ -66,3 +69,15 @@ def filter_empty(passages: List[str], reviews: List[str]) -> None:
             size -= 1
         else:
             i += 1
+
+@typechecked
+def _tok(tokenizer : Callable, context_len : int, string_batch: Iterable[str]) -> BatchEncoding:
+    for i, _ in enumerate(string_batch):
+        if len(string_batch[i]) > context_len:
+            string_batch[i] = string_batch[i][-context_len:]
+    if not isinstance(string_batch, list):
+        string_batch = list(string_batch)
+    return tokenizer(string_batch)
+
+TokMaskTuplePass = Tuple[TensorType["batch", "pass_N"], TensorType["batch", "pass_N"]]
+TokMaskTupleRev = Tuple[TensorType["batch", "rev_N"], TensorType["batch", "rev_N"]]

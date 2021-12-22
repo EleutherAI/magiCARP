@@ -5,8 +5,7 @@ from typing import Any, Dict, Tuple, Iterable, Callable
 
 from datasets import load_from_disk
 from torch.utils.data import Dataset
-from transformers.tokenization_utils_base import BatchEncoding
-from carp.util import TokMaskTuplePass, TokMaskTupleRev
+from carp.pytorch.data.utils.data_util import _tok, TokMaskTuplePass, TokMaskTupleRev
 from typeguard import typechecked
 
 
@@ -68,6 +67,8 @@ class BaseDataPipeline(Dataset):
     def __len__(self) -> int:
         return len(self.passages)
 
+
+
     @staticmethod
     def tokenizer_factory(tokenizer: Callable, process : Callable, context_len: int) -> Callable:
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
@@ -79,16 +80,6 @@ class BaseDataPipeline(Dataset):
         Returns:
             Callable: A function that will take a batch of string tuples and tokenize them properly.
         """
-
-        @typechecked
-        def _tok(string_batch: Iterable[str]) -> BatchEncoding:
-            for i, _ in enumerate(string_batch):
-                if len(string_batch[i]) > context_len:
-                    string_batch[i] = string_batch[i][-context_len:]
-            if not isinstance(string_batch, list):
-                string_batch = list(string_batch)
-            return tokenizer(string_batch)
-
         @typechecked
         def collate(
             data: Iterable[Tuple[str, str]]
