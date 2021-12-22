@@ -1,47 +1,10 @@
-from datasets import load_from_disk
-from torch.utils.data import Dataset
-from torchtyping import TensorType, patch_typeguard
+from torchtyping import TensorType
 from transformers.tokenization_utils_base import BatchEncoding
 from typing import Callable, Dict, Iterable, Tuple
 from typeguard import typechecked
 
-patch_typeguard()
-
 TokMaskTuplePass = Tuple[TensorType["batch", "pass_N"], TensorType["batch", "pass_N"]]
 TokMaskTupleRev = Tuple[TensorType["batch", "rev_N"], TensorType["batch", "rev_N"]]
-
-
-class CarpDataset(Dataset):
-    """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
-
-    def __init__(
-        self,
-        dupe_protection: bool = True,
-        path: str = "dataset",
-    ):
-        dataset = load_from_disk(path)
-        train = dataset["train"]
-        passages = train["story_target"]
-        reviews = train["target_comment"]
-        if dupe_protection:
-            size = len(passages)
-            i = 0
-            while i < size:
-                if len(reviews[i]) <= 7 or len(passages[i]) <= 7:
-                    del passages[i]
-                    del reviews[i]
-                    size -= 1
-                else:
-                    i += 1
-        self.passages = passages
-        self.reviews = reviews
-
-    def __getitem__(self, index: int) -> Tuple[str, str]:
-        return self.passages[index], self.reviews[index]
-
-    def __len__(self) -> int:
-        return len(self.passages)
-
 
 def tokenizer_factory(tokenizer: Callable, context_len: int) -> Callable:
     """Function factory that creates a collate function for use with a torch.util.data.Dataloader

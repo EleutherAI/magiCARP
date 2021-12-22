@@ -1,5 +1,6 @@
 import pytest
-from carp.pytorch.dataset import CarpDataset, tokenizer_factory
+from carp.pytorch.data import BaseDatapipeline
+from carp.pytorch.data.tokenizer import tokenizer_factory
 from transformers import AutoTokenizer
 from unittest.mock import patch
 
@@ -21,7 +22,7 @@ def toy_dataset():
 def carp(toy_dataset):
     with patch('carp.pytorch.dataset.load_from_disk') as ds_patch:
         ds_patch.return_value = toy_dataset
-        return CarpDataset(dupe_protection=False)
+        return BaseDatapipeline(dupe_protection=False)
 
 
 def test_carpdataset(carp):

@@ -32,6 +32,13 @@ def register_architecture(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
+    
+    cls = name
+    name = cls.__name__
+    register_class(cls, name.lower())
+
+    return cls
+
 
 patch_typeguard()
 

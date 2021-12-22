@@ -29,6 +29,12 @@ def register_encoder(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
+    
+    cls = name
+    name = cls.__name__
+    register_class(cls, name.lower())
+
+    return cls
 
 def extract_neo(output: Dict[str, Any]) -> TensorType['batch', -1, 'embed_dim']:
     return output["hidden_states"][-2]

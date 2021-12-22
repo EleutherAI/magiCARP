@@ -5,7 +5,8 @@ from carp.configs import CARPConfig, TrainConfig
 from carp.pytorch.model.architectures import get_architecture, get_architecture_names
 from carp.pytorch.model.encoders import get_encoder_names
 from carp.util import get_scheduling_func
-from carp.pytorch.dataset import CarpDataset, tokenizer_factory
+from carp.pytorch.data import BaseDatapipeline
+from carp.pytorch.data.tokenizer import tokenizer_factory
 
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -45,7 +46,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
 
 
 def get_datasets(config, data_path, random_seed=None):
-    carp = CarpDataset(config.dupe_protection, data_path)
+    carp = BaseDatapipeline(config.dupe_protection, data_path)
     size = len(carp)
 
     seed = torch.manual_seed(random_seed)
@@ -74,7 +75,7 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
 
 
 # Dataset assumed to be list of pairs on memory
-def train(model, dataset: CarpDataset, evalset: CarpDataset, config: TrainConfig, args):
+def train(model, dataset: BaseDatapipeline, evalset: BaseDatapipeline, config: TrainConfig, args):
     # Tokenizes string batch using encoder tokenizer
     LEARNING_RATE_INIT = config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint

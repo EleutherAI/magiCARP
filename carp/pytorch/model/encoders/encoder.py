@@ -9,7 +9,7 @@ from transformers import AutoModel, AutoTokenizer, AutoConfig
 
 from carp.pytorch.model.encoders import register_encoder, BaseEncoder
 
-@register_encoder("SumTextEncoder")
+@register_encoder
 class SumTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
@@ -38,7 +38,7 @@ class SumTextEncoder(BaseEncoder):
             hidden = hidden * emb_mask
         return F.normalize(hidden.sum(1)) # Sum along sequence
 
-@register_encoder("EOTTextEncoder")
+@register_encoder
 class EOTTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
@@ -72,7 +72,7 @@ class EOTTextEncoder(BaseEncoder):
 
 
 # Adds CLS token to start of string, end of string and middle of string
-@register_encoder("MultiCLSEncoder")
+@register_encoder
 class MultiCLSEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
@@ -113,7 +113,7 @@ class MultiCLSEncoder(BaseEncoder):
         end_embed = hidden[torch.arange(batch_size), end_inds]
         return F.normalize(start_embed + mid_embed + end_embed)
 
-@register_encoder("DirectTextEncoder")
+@register_encoder
 class DirectTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
@@ -136,7 +136,7 @@ class DirectTextEncoder(BaseEncoder):
         )
         return embed
 
-@register_encoder("MeanPoolEncoder")
+@register_encoder
 class MeanPoolEncoder(BaseEncoder):
 
     def __init__(self, model_path: str, model_arch: str):
