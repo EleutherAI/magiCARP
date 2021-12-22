@@ -52,17 +52,19 @@ class BaseEncoder(nn.Module):
     # For different models, hidden state is returned differently
     extract_fns = {"neo": extract_neo, "roberta": extract_roberta}
 
-    def __init__(self, model_path: str, model_arch: str):
+    def __init__(self, model_path: str, model_arch: str, skip_init : bool = False):
         super().__init__()
-        self.model = AutoModel.from_pretrained(model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.extract_fn = self.extract_fns.get(model_arch)
         self.cfg = AutoConfig.from_pretrained(model_path)
         self.d_model = self.cfg.hidden_size
-        
-        # add quote token to model and tokenizer
-        self.tokenizer.add_tokens(["[quote]"])
-        self.model.resize_token_embeddings(len(self.tokenizer))
+
+        if not skip_init:
+            self.model = AutoModel.from_pretrained(model_path)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+            # add quote token to model and tokenizer
+            self.tokenizer.add_tokens(["[quote]"])
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
     @property
     def device(self):
@@ -90,10 +92,10 @@ class BaseEncoder(nn.Module):
 
 # Abstract base for a model that can serve both for MLM and encoding
 # Makes assumption that central model is MLM (i.e. it's roberta)
-class MLMEncoder(nn.Module):
+class MLMEncoder(BaseEncoder):
 
     def __init__(self, model_path: str, model_arch: str):
-        super().__init__()
+        super().__init__(model_path=model_path, model_arch=model_arch, skip_init=True)
         self.model = transformers.RobertaForMaskedLM.from_pretrained(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         

@@ -2,9 +2,9 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "johngiorgi/declutr-base"
-  model_arch: "declutr"
-  encoder_type: "DirectTextEncoder"
+  model_path: "roberta-base"
+  model_arch: "roberta"
+  encoder_type: "MLMSumEncoder"
   grad_clip: -1.0
   momentum: 0.0
   device: "cuda"
