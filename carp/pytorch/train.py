@@ -5,7 +5,7 @@ from carp.configs import CARPConfig, TrainConfig
 from carp.pytorch.model.architectures import get_architecture, get_architecture_names
 from carp.pytorch.model.encoders import get_encoder_names
 from carp.util import get_scheduling_func
-from carp.pytorch.data import BaseDataPipeline
+from carp.pytorch.data import get_datapipeline, get_datapipeline_names, BaseDataPipeline
 
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -45,7 +45,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
 
 
 def get_datasets(config, data_path, random_seed=None):
-    carp = BaseDataPipeline(config.dupe_protection, data_path)
+    carp = get_datapipeline(config.data_pipeline)(config.dupe_protection, data_path)
     size = len(carp)
 
     seed = torch.manual_seed(random_seed)
@@ -78,7 +78,17 @@ def train(model, dataset: BaseDataPipeline, evalset: BaseDataPipeline, config: T
     # Tokenizes string batch using encoder tokenizer
     LEARNING_RATE_INIT = config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
-    tokenizer = BaseDataPipeline.tokenizer_factory(model.passage_encoder.tok, config.n_ctx)
+
+    # setup data pipeline
+    call_tokenizer = model.passage_encoder.call_tokenizer
+    tokenizer_factory = get_datapipeline(config.data_pipeline).tokenizer_factory
+    tokenizer =\
+        get_datapipeline(config.data_pipeline).create_tokenizer_factory(
+            call_tokenizer,
+            tokenizer_factory,
+            config.n_ctx)
+    tokenizer = tokenizer(model.passage_encoder)
+
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0)
     scheduler = LambdaLR(opt, get_scheduling_func(config))
     scaler = torch.cuda.amp.GradScaler()

@@ -28,4 +28,5 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
+  data_pipeline: "MLMDataPipeline"
   

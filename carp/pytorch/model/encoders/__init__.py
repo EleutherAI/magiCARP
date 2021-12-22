@@ -68,7 +68,7 @@ class BaseEncoder(nn.Module):
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         pass
 
-    def tok(self, string_batch: Iterable[str]):
+    def call_tokenizer(self, string_batch: Iterable[str]):
         return self.tokenizer(
             self.preprocess(string_batch),
             return_tensors='pt',  # Will they ever _not_ be pytorch tensors?

@@ -70,14 +70,16 @@ def filter_empty(passages: List[str], reviews: List[str]) -> None:
         else:
             i += 1
 
-@typechecked
-def _tok(tokenizer : Callable, context_len : int, string_batch: Iterable[str]) -> BatchEncoding:
-    for i, _ in enumerate(string_batch):
-        if len(string_batch[i]) > context_len:
-            string_batch[i] = string_batch[i][-context_len:]
-    if not isinstance(string_batch, list):
-        string_batch = list(string_batch)
-    return tokenizer(string_batch)
+def create_tok(tokenizer : Callable, context_len : int):
+    @typechecked
+    def _tok(string_batch: Iterable[str]) -> BatchEncoding:
+        for i, _ in enumerate(string_batch):
+            if len(string_batch[i]) > context_len:
+                string_batch[i] = string_batch[i][-context_len:]
+        if not isinstance(string_batch, list):
+            string_batch = list(string_batch)
+        return tokenizer(string_batch)
+    return _tok
 
 TokMaskTuplePass = Tuple[TensorType["batch", "pass_N"], TensorType["batch", "pass_N"]]
 TokMaskTupleRev = Tuple[TensorType["batch", "rev_N"], TensorType["batch", "rev_N"]]

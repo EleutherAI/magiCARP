@@ -5,9 +5,11 @@ from typing import Any, Dict, Tuple, Iterable, Callable
 
 from datasets import load_from_disk
 from torch.utils.data import Dataset
-from carp.pytorch.data.utils.data_util import _tok, TokMaskTuplePass, TokMaskTupleRev
+from carp.pytorch.data.utils.data_util import create_tok, TokMaskTuplePass, TokMaskTupleRev
 from typeguard import typechecked
+from functools import partial
 
+from carp.pytorch.model.encoders import BaseEncoder
 
 # specifies a dictionary of architectures
 _DATAPIPELINE: Dict[str, any] = {}  # registry
@@ -67,16 +69,29 @@ class BaseDataPipeline(Dataset):
     def __len__(self) -> int:
         return len(self.passages)
 
+    @staticmethod
+    def create_tokenizer_factory(call_tokenizer : Callable, tokenizer_factory : Callable, context_len : int) -> Callable:
+        
+        """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
 
+        Args:
+            call_tokenizer (Callable): A function defined within BaseEncoder that outlines a custom encoder processing step
+            tokenizer_factory (Callable): The factory we wish to initialize
+            context_len (int): Max context length of a batch element.
+        Returns:
+            Callable: A function that create a factory that will take a batch of string tuples and tokenize them properly.
+        """
+        tok_func = create_tok(call_tokenizer, context_len=context_len)
+        return partial(tokenizer_factory, tok_func)
 
     @staticmethod
-    def tokenizer_factory(tokenizer: Callable, process : Callable, context_len: int) -> Callable:
+    def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
+
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
         Args:
-            tokenizer (Callable): A Huggingface model tokenizer, taking strings to torch Tensors
-            context_len (int): Max length of the passages passed to the tokenizer
-
+            _tok (Callable): A Huggingface model tokenizer, taking strings to torch Tensors
+            encoder (BaseEncoder): A CARP base encoder module.
         Returns:
             Callable: A function that will take a batch of string tuples and tokenize them properly.
         """

@@ -35,6 +35,7 @@ class TrainConfig:
     checkpoint_interval: int
     validate_interval: int
     eval_selection: str
+    data_pipeline : str
     # Dataset sometimes contains short reviews like "lol"
     # These are harmful during training because if a batch contains more than one
     # then the duplicates will create exploding gradients through CE loss
