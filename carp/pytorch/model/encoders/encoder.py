@@ -6,16 +6,14 @@ import torch.nn.functional as F
 import torch
 from torchtyping import TensorType
 from transformers import AutoModel, AutoTokenizer, AutoConfig
+import transformers
 
-from carp.pytorch.model.encoders import register_encoder, BaseEncoder
+from carp.pytorch.model.encoders import register_encoder, BaseEncoder, MLMEncoder
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-        # Add quote token to model and tokenizer
-        self.tokenizer.add_tokens(["[quote]"])
-        self.model.resize_token_embeddings(len(self.tokenizer))
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -42,8 +40,8 @@ class SumTextEncoder(BaseEncoder):
 class EOTTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-        # Add quote token to model and tokenizer
-        self.tokenizer.add_tokens(["[quote]", "<|endoftext|>"])
+        # Add eot,pad token to model and tokenizer
+        self.tokenizer.add_tokens(["<|endoftext|>"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         self.model.resize_token_embeddings(len(self.tokenizer))
 
@@ -76,7 +74,7 @@ class EOTTextEncoder(BaseEncoder):
 class MultiCLSEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-        self.tokenizer.add_tokens(["[CLS]", "[quote]"])
+        self.tokenizer.add_tokens(["[CLS]"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         self.model.resize_token_embeddings(len(self.tokenizer))
 
@@ -117,10 +115,6 @@ class MultiCLSEncoder(BaseEncoder):
 class DirectTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-        # Add quote token to model and tokenizer
-        self.tokenizer.add_tokens(["[quote]"])
-        # self.tokenizer.add_special_tokens({'pad_token':'[PAD]'})
-        self.model.resize_token_embeddings(len(self.tokenizer))
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -141,8 +135,6 @@ class MeanPoolEncoder(BaseEncoder):
 
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-        self.tokenizer.add_tokens(["[quote]"])
-        self.model.resize_token_embeddings(len(self.tokenizer))
     
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -155,3 +147,19 @@ class MeanPoolEncoder(BaseEncoder):
     def forward(self, x, mask):
         out = self.model(x, mask)
         return self.mean_pooling(out, mask)
+
+# Same as summed text but alternates as being an MLM
+@register_encoder
+class MLMSumEncoder(MLMEncoder):
+
+    def __init__(self, model_path: str, model_arch: str):
+        super().__init__(model_path, model_arch)
+
+    def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
+        return string_batch
+
+    def process_hidden_state(self, hidden: TensorType['batch', 'N', 'embed_dim'], mask: TensorType['batch', 'N']) -> TensorType['batch', 'embed_dim']:
+        if mask != None:
+            emb_mask = mask.unsqueeze(2).repeat(1, 1, self.d_model)
+            hidden = hidden * emb_mask
+        return F.normalize(hidden.sum(1))
