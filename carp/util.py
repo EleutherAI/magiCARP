@@ -4,7 +4,7 @@ import math
 import torch
 import torch.functional as F
 from torchtyping import TensorType
-from typing import List, Iterable, Any, Tuple
+from typing import List, Iterable, Any
 
 # Break list or tensor into chunks
 def chunk(L: TensorType['batch'], sep: int) -> List[TensorType['minibatch']]:
@@ -71,3 +71,4 @@ def batch_data(
 
     if not discard_partial and len(batch) > 0:
         yield batch
+

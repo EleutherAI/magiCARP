@@ -20,7 +20,7 @@ class SumTextEncoder(BaseEncoder):
 
     def forward(self, x, mask=None, tokenize: bool = False, mask_sum: bool = True) -> TensorType['batch', 'embed_dim']:
         if tokenize:
-            x = self.tok(x)
+            x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
         out = self.model(
@@ -121,7 +121,7 @@ class DirectTextEncoder(BaseEncoder):
 
     def forward(self, x, mask=None, tokenize: bool = False):
         if tokenize:
-            x = self.tok(x)
+            x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
         out = self.model(input_ids=x, attention_mask=mask)[0]

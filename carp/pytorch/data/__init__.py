@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Iterable, Callable, List
-from torchtyping import TensorType, patch_typeguard
-from typeguard import typechecked
+from typing import Any, Dict, Tuple, Iterable, Callable
 
-import torch
-import torch.nn.functional as F
-from torch import nn
 from datasets import load_from_disk
 from torch.utils.data import Dataset
+from carp.pytorch.data.utils.data_util import create_tok, TokMaskTuplePass, TokMaskTupleRev
+from typeguard import typechecked
+from functools import partial
 
+from carp.pytorch.model.encoders import BaseEncoder
 
 # specifies a dictionary of architectures
 _DATAPIPELINE: Dict[str, any] = {}  # registry
@@ -41,7 +38,7 @@ def register_datapipeline(name):
 
 
 @register_datapipeline
-class BaseDatapipeline(Dataset):
+class BaseDataPipeline(Dataset):
     """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
 
     def __init__(
@@ -71,15 +68,51 @@ class BaseDatapipeline(Dataset):
 
     def __len__(self) -> int:
         return len(self.passages)
+
+    @staticmethod
+    def create_tokenizer_factory(call_tokenizer : Callable, tokenizer_factory : Callable, context_len : int) -> Callable:
+        
+        """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
+
+        Args:
+            call_tokenizer (Callable): A function defined within BaseEncoder that outlines a custom encoder processing step
+            tokenizer_factory (Callable): The factory we wish to initialize
+            context_len (int): Max context length of a batch element.
+        Returns:
+            Callable: A function that create a factory that will take a batch of string tuples and tokenize them properly.
+        """
+        tok_func = create_tok(call_tokenizer, context_len=context_len)
+        return partial(tokenizer_factory, tok_func)
+
+    @staticmethod
+    def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
+
+        """Function factory that creates a collate function for use with a torch.util.data.Dataloader
+
+        Args:
+            _tok (Callable): A Huggingface model tokenizer, taking strings to torch Tensors
+            encoder (BaseEncoder): A CARP base encoder module.
+        Returns:
+            Callable: A function that will take a batch of string tuples and tokenize them properly.
+        """
+        @typechecked
+        def collate(
+            data: Iterable[Tuple[str, str]]
+        ) -> Tuple[TokMaskTuplePass, TokMaskTupleRev]:
+            passages, reviews = zip(*data)
+            pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
+            pass_masks = pass_tokens["attention_mask"]
+            rev_masks = rev_tokens["attention_mask"]
+            pass_tokens = pass_tokens["input_ids"]
+            rev_tokens = rev_tokens["input_ids"]
+            return (
+                (pass_tokens, pass_masks),
+                (rev_tokens, rev_masks),
+            )
+
+        return collate
     
-
-
-
-
-
-from carp.pytorch.model.architectures.carp import CARP
-from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-from carp.pytorch.model.architectures.carp_cloob import CARPCloob
+from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]
