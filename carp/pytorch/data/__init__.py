@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Iterable, Callable, List
-from torchtyping import TensorType, patch_typeguard
-from typeguard import typechecked
+from typing import Any, Dict, Tuple, Iterable, Callable
 
-import torch
-import torch.nn.functional as F
-from torch import nn
 from datasets import load_from_disk
 from torch.utils.data import Dataset
+from transformers.tokenization_utils_base import BatchEncoding
+from carp.util import TokMaskTuplePass, TokMaskTupleRev
+from typeguard import typechecked
 
 
 # specifies a dictionary of architectures
@@ -41,7 +37,7 @@ def register_datapipeline(name):
 
 
 @register_datapipeline
-class BaseDatapipeline(Dataset):
+class BaseDataPipeline(Dataset):
     """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
 
     def __init__(
@@ -71,15 +67,46 @@ class BaseDatapipeline(Dataset):
 
     def __len__(self) -> int:
         return len(self.passages)
+
+    @staticmethod
+    def tokenizer_factory(tokenizer: Callable, process : Callable, context_len: int) -> Callable:
+        """Function factory that creates a collate function for use with a torch.util.data.Dataloader
+
+        Args:
+            tokenizer (Callable): A Huggingface model tokenizer, taking strings to torch Tensors
+            context_len (int): Max length of the passages passed to the tokenizer
+
+        Returns:
+            Callable: A function that will take a batch of string tuples and tokenize them properly.
+        """
+
+        @typechecked
+        def _tok(string_batch: Iterable[str]) -> BatchEncoding:
+            for i, _ in enumerate(string_batch):
+                if len(string_batch[i]) > context_len:
+                    string_batch[i] = string_batch[i][-context_len:]
+            if not isinstance(string_batch, list):
+                string_batch = list(string_batch)
+            return tokenizer(string_batch)
+
+        @typechecked
+        def collate(
+            data: Iterable[Tuple[str, str]]
+        ) -> Tuple[TokMaskTuplePass, TokMaskTupleRev]:
+            passages, reviews = zip(*data)
+            pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
+            pass_masks = pass_tokens["attention_mask"]
+            rev_masks = rev_tokens["attention_mask"]
+            pass_tokens = pass_tokens["input_ids"]
+            rev_tokens = rev_tokens["input_ids"]
+            return (
+                (pass_tokens, pass_masks),
+                (rev_tokens, rev_masks),
+            )
+
+        return collate
     
-
-
-
-
-
-from carp.pytorch.model.architectures.carp import CARP
-from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-from carp.pytorch.model.architectures.carp_cloob import CARPCloob
+from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]

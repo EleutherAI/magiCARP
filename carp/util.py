@@ -71,3 +71,6 @@ def batch_data(
 
     if not discard_partial and len(batch) > 0:
         yield batch
+
+TokMaskTuplePass = Tuple[TensorType["batch", "pass_N"], TensorType["batch", "pass_N"]]
+TokMaskTupleRev = Tuple[TensorType["batch", "rev_N"], TensorType["batch", "rev_N"]]

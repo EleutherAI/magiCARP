@@ -11,7 +11,7 @@ from typing import List
 patch_typeguard()
 
 @typechecked
-@register_architecture("CARP Momentum")
+@register_architecture
 class CARPMomentum(ContrastiveModel):
     def __init__(self, config: ModelConfig):
         super().__init__()

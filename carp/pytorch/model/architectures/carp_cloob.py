@@ -43,7 +43,7 @@ def hopfield(state_patterns, stored_patterns, hopfield_scale):
 patch_typeguard()
 
 @typechecked
-@register_architecture("CARP Cloob")
+@register_architecture
 class CARPCloob(ContrastiveModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
