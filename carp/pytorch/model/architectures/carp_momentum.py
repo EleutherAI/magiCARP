@@ -12,7 +12,7 @@ patch_typeguard()
 
 @typechecked
 @register_architecture
-class CARPMomentum(ContrastiveModel):
+class CARPMomentum(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config

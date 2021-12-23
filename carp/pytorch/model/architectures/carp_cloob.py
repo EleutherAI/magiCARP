@@ -44,7 +44,7 @@ patch_typeguard()
 
 @typechecked
 @register_architecture
-class CARPCloob(ContrastiveModel):
+class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config

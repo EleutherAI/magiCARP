@@ -4,7 +4,7 @@ model:
   linear_projection: true
   model_path: "roberta-base"
   model_arch: "roberta"
-  encoder_type: "MLMSumEncoder"
+  encoder_type: "SumTextEncoder"
   grad_clip: -1.0
   momentum: 0.0
   device: "cuda"
@@ -28,5 +28,6 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "MLMDataPipeline"
+  data_pipeline: "BaseDataPipeline"
+  orchestrator: "BaseOrchestrator"
   

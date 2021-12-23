@@ -43,7 +43,7 @@ def register_architecture(name):
 patch_typeguard()
 
 @typechecked
-class ContrastiveModel(nn.Module):
+class BaseModel(nn.Module):
     """Abstract class that defines the basic API used for the different contrastive models."""
 
     def __init__(self):

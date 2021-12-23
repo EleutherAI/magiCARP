@@ -3,7 +3,7 @@ from carp.pytorch.legacy.carp_v1 import *
 
 # import all new model formats here
 from carp.pytorch.model.architectures import *
-from carp.pytorch.model.encoders.encoder import *
+from carp.pytorch.model.encoders.pool_encoder import *
 
 # import decorator
 from carp.pytorch.checkpointing import register_converter, Converter

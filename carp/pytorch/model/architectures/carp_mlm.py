@@ -17,7 +17,7 @@ patch_typeguard()
 
 @typechecked
 @register_architecture
-class CARPMLM(ContrastiveModel):
+class CARPMLM(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
