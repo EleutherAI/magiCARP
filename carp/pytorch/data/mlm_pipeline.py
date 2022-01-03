@@ -46,9 +46,10 @@ class MLMDataPipeline(BaseDataPipeline):
             pass_tokens = pass_tokens["input_ids"]
             rev_tokens = rev_tokens["input_ids"]
 
-            pass_tokens, pass_labels = mlm_collator.torch_mask_tokens(pass_tokens)
-            rev_tokens, rev_labels = mlm_collator.torch_mask_tokens(rev_tokens)
-
+            #pass_tokens, pass_labels = mlm_collator.torch_mask_tokens(pass_tokens)
+            #rev_tokens, rev_labels = mlm_collator.torch_mask_tokens(rev_tokens)
+            pass_labels = pass_tokens
+            rev_labels = rev_tokens
             return (
                 MLMBatchElement(pass_tokens, pass_masks, pass_labels),
                 MLMBatchElement(rev_tokens, rev_masks, rev_labels),
