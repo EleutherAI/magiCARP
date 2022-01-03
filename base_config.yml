@@ -2,7 +2,7 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "roberta-base"
+  model_path: "haisongzhang/roberta-tiny-cased"
   model_arch: "roberta"
   encoder_type: "MLMSumEncoder"
   grad_clip: -1.0
@@ -30,5 +30,5 @@ train_job:
   dupe_protection: true
   hard_dupe_protection: false
   data_pipeline: "MLMDataPipeline"
-  orchestrator: "BaseOrchestrator"
+  orchestrator: "MLMOrchestrator"
   
