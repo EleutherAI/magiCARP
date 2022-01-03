@@ -97,37 +97,43 @@ class BaseModel(nn.Module):
             
     def _embed_data(
         self,
-        x: TensorType["batch_dim", -1],
-        masks: TensorType["batch_dim", -1],
+        x: BatchElement, 
         encoder,
         projector,
     ):
-        x = encoder(x.to(self.device), masks.to(self.device))
-        return projector(x)
+        x = encoder(x.input_ids.to(self.device), x.mask.to(self.device))
+        x.hidden = projector(x.hidden)
+        return x
 
-    def encode_reviews(self, x, masks=None):
-        print(x.shape)
-        print(masks.shape)
-        return self._embed_data(x, masks, self.review_encoder, self.rev_projector)
+    def encode_reviews(self, x):
+        return self._embed_data(x, self.review_encoder, self.rev_projector)
 
-    def encode_passages(self, x, masks=None):
-        return self._embed_data(x, masks, self.passage_encoder, self.pass_projector)
+    def encode_passages(self, x):
+        return self._embed_data(x, self.passage_encoder, self.pass_projector)
 
     def calculate_embeddings(
         self,
         passages: Iterable[
             Tuple[
-                TensorType[-1, "N_pass"], TensorType[-1, "N_pass"]
+                BatchElement
             ]
         ],
         reviews: Iterable[
-            Tuple[TensorType[-1, "N_rev"], TensorType[-1, "N_rev"]]
+            Tuple[
+                BatchElement
+            ]
         ],
+        return_only_embeddings : bool = True,
     ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
-            pass_encs = [self.encode_passages(*p) for p in passages]
-            rev_encs = [self.encode_reviews(*r) for r in reviews]
+            pass_encs = [self.encode_passages(p) for p in passages]
+            rev_encs = [self.encode_reviews(r) for r in reviews]
+
+        # if we only need the embeddings, fetch them
+        if return_only_embeddings:
+            pass_encs = list(map(lambda x: x.hidden, pass_encs))
+            rev_encs = list(map(lambda x: x.hidden, rev_encs))
         return pass_encs, rev_encs
 
     def train_step(
@@ -148,6 +154,7 @@ class BaseModel(nn.Module):
             reviews.append(r)
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
+
             val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
             val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}

@@ -1,12 +1,16 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Iterable, Tuple, Union
+from typing import Iterable, Optional
 from torch import nn
 import torch.nn.functional as F
 from torchtyping import TensorType
 
 from transformers import RobertaForMaskedLM, AutoTokenizer, AutoConfig
-from carp.pytorch.model.encoders import register_encoder, BaseEncoder
+from carp.pytorch.model.encoders import register_encoder, BaseEncoder, BaseEncoderOutput
+
+@dataclass
+class MLMEncoderOutput(BaseEncoderOutput):
+    loss : Optional[TensorType[()]]
 
 # Abstract base for a model that can serve both for MLM and encoding
 # Makes assumption that central model is MLM (i.e. it's roberta)
@@ -27,13 +31,6 @@ class MLMEncoder(BaseEncoder):
         self.tokenizer.add_tokens(["[quote]"])
         self.model.resize_token_embeddings(len(self.tokenizer))
 
-        self.encode_flag = False
-
-    def flag_encode(self): self.encode_flag = True
-    def flag_mlm(self): self.encode_flag = False
-    def encode_mode(self): return self.encode_flag
-    def mlm_mode(self): return not self.encode_flag
-
     @property
     def device(self):
         return self.model.device
@@ -53,18 +50,26 @@ class MLMEncoder(BaseEncoder):
             padding=True,
         )
 
-    def forward(self, x, mask = None):
-        out = self.model(
-                input_ids = x, 
-                attention_mask = mask,
-                output_hidden_states = True,
-        )
-        if self.encode_flag:
-            hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(out)
-            return self.process_hidden_state(hidden, mask)
+    def forward(self, x, mask = None, labels = None):
+        out = {}
+        if not labels is None:
+            model_output = self.model(
+                    input_ids = x, 
+                    attention_mask = mask,
+                    labels = labels,
+                    output_hidden_states = True
+            )
+            loss =  model_output['loss']
         else:
-            logits: TensorType['batch', 'vocab'] = out['logits'] 
-            return logits
+            model_output = self.model(
+                    input_ids = x, 
+                    attention_mask = mask,
+                    output_hidden_states = True
+            )
+            loss = None
+
+        hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(model_output)
+        return MLMEncoderOutput(self.process_hidden_state(hidden, mask), loss)
 
 
 # Same as summed text but alternates as being an MLM

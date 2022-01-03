@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, Tuple, Iterable, Union, List
 from torchtyping import TensorType
 
@@ -44,6 +45,11 @@ def extract_roberta(output: Tuple) -> TensorType['batch', -1, 'embed_dim']:
 
 
 Device = Union[str, torch.DeviceObjType]
+
+
+@dataclass
+class BaseEncoderOutput():
+    hidden : TensorType['batch', 'embed_dim']
 
 
 class BaseEncoder(nn.Module):

@@ -44,12 +44,13 @@ class CARPMLM(BaseModel):
 
     def _embed_data(
         self,
-        x: TensorType["batch_dim", -1],
-        masks: TensorType["batch_dim", -1],
+        x: MLMBatchElement,
         encoder,
         projector,
     ):
-        x = encoder(x.to(self.device), masks.to(self.device))
+        x = encoder(x.input_ids.to(self.device),
+            x.mask.to(self.device),
+            x.mlm_labels.to(self.device))
         # if we are not in mlm mode, run the projection layer which is used for contrastive learning 
         if not self.mlm_mode:
             return projector(x)
@@ -69,25 +70,34 @@ class CARPMLM(BaseModel):
         microbatch_inds = generate_indices(
             passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
-        # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[mbTokens, mbTokens]] = [
-            (passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
+        # Split batch elements into smaller batch elements 
+        pass_mbs: List[Tuple[MLMBatchElement]] = [
+            MLMBatchElement(passages.input_ids[i], passages.mask[i], passages.mlm_labels[i])\
+                for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
-            (reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
+        rev_mbs: List[Tuple[MLMBatchElement]] = [
+            MLMBatchElement(reviews.input_ids[i], reviews.mask[i], reviews.mlm_labels[i])\
+                 for i in microbatch_inds
         ]
-        print(len(pass_mbs))
-        
+        opt.zero_grad()
+        if self.mlm_mode:
+            with torch.cuda.amp.autocast():
+                loss_pass = [self.encode_passages(p).loss for p in pass_mbs]
+            [scaler.scale(l).backward() for l in loss_pass]
+            with torch.cuda.amp.autocast():
+                loss_rev = [self.encode_reviews(r).loss for r in rev_mbs]
+            [scaler.scale(l).backward() for l in loss_rev]
+            scaler.step(opt)
+            scaler.update()
+
+            mlm_loss = (sum(loss_pass) + sum(loss_rev)) / (passages.input_ids.shape[0] * 2)
+            return {
+                "Loss/MLM" : mlm_loss,
+                "Loss/Train" : mlm_loss
+            }
+                
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
-
-        opt.zero_grad()
-
-        if self.mlm_mode:
-            # compute an MLM head
-            #print(pass_encs)
-            #print(rev_encs)
-            return None
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):

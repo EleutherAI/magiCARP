@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable, Iterable, Tuple
+from typing import Any, List, Optional, Callable, Iterable, Tuple
 from transformers.tokenization_utils_base import BatchEncoding
 from typeguard import typechecked
 from torchtyping import TensorType
@@ -83,6 +83,6 @@ def create_tok(tokenizer : Callable, context_len : int):
 
 @dataclass
 class BatchElement:
-    input_ids : TensorType["batch", "pass_N"] 
-    mask : TensorType["batch", "pass_N"] 
+    input_ids : TensorType[-1, "pass_N"] 
+    mask : TensorType[-1, "pass_N"] 
     

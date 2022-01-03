@@ -8,6 +8,8 @@ from carp.pytorch.model.encoders import get_encoder
 from carp.util import mbTokens, generate_indices
 from typing import List
 
+from carp.pytorch.data.utils.data_util import BatchElement
+
 patch_typeguard()
 
 @typechecked
@@ -44,12 +46,13 @@ class CARP(BaseModel):
             passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        pass_mbs: List[Tuple[BatchElement]] = [
             (passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        rev_mbs: List[Tuple[BatchElement]] = [
             (reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
         ]
+
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 

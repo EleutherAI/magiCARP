@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch
 from torchtyping import TensorType
 
-from carp.pytorch.model.encoders import register_encoder, BaseEncoder
+from carp.pytorch.model.encoders import register_encoder, BaseEncoder, BaseEncoderOutput
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
@@ -32,7 +32,7 @@ class SumTextEncoder(BaseEncoder):
         if mask_sum:
             emb_mask = mask.unsqueeze(2).repeat(1, 1, self.d_model)
             hidden = hidden * emb_mask
-        return F.normalize(hidden.sum(1)) # Sum along sequence
+        return BaseEncoderOutput(F.normalize(hidden.sum(1))) # Sum along sequence
 
 @register_encoder
 class EOTTextEncoder(BaseEncoder):
@@ -63,8 +63,7 @@ class EOTTextEncoder(BaseEncoder):
         )
         hidden = self.extract_fn(out)
         eot_inds = self.last_ones(mask)
-        y = hidden[torch.arange(hidden.size(0)), eot_inds]
-        return y
+        return BaseEncoderOutput(hidden[torch.arange(hidden.size(0)), eot_inds])
 
 
 # Adds CLS token to start of string, end of string and middle of string
@@ -107,7 +106,7 @@ class MultiCLSEncoder(BaseEncoder):
         start_embed = hidden[:, 0]
         mid_embed = hidden[torch.arange(batch_size), mid_inds]
         end_embed = hidden[torch.arange(batch_size), end_inds]
-        return F.normalize(start_embed + mid_embed + end_embed)
+        return BaseEncoderOutput(F.normalize(start_embed + mid_embed + end_embed))
 
 @register_encoder
 class DirectTextEncoder(BaseEncoder):
@@ -126,7 +125,7 @@ class DirectTextEncoder(BaseEncoder):
         embed = torch.sum(out * mask.unsqueeze(-1), dim=1) / torch.clamp(
             torch.sum(mask, dim=1, keepdims=True), min=1e-9
         )
-        return embed
+        return BaseEncoderOutput(embed)
 
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
@@ -144,4 +143,4 @@ class MeanPoolEncoder(BaseEncoder):
     
     def forward(self, x, mask):
         out = self.model(x, mask)
-        return self.mean_pooling(out, mask)
+        return BaseEncoderOutput(self.mean_pooling(out, mask))
