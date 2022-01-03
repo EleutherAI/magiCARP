@@ -47,12 +47,18 @@ class CARPMLM(BaseModel):
         encoder,
         projector,
     ):
-        x = encoder(x.input_ids.to(self.device),
-            x.mask.to(self.device),
-            x.mlm_labels.to(self.device))
-        # if we are not in mlm mode, run the projection layer which is used for contrastive learning 
-        if not self.mlm_mode:
-            return projector(x)
+        if self.mlm_mode:
+            x = encoder(x.input_ids.to(self.device),
+                x.mask.to(self.device),
+                x.mlm_input_ids.to(self.device),
+                x.mlm_labels.to(self.device))
+        else:
+            x = encoder(x.input_ids.to(self.device),
+                x.mask.to(self.device),
+                None)
+            # if we are not in mlm mode, run the projection layer which is used for contrastive learning 
+            if not self.mlm_mode:
+                return projector(x)
         return x
     # overridden to decrease memory footprint
     def calculate_embeddings(
@@ -97,11 +103,13 @@ class CARPMLM(BaseModel):
         )
         # Split batch elements into smaller batch elements 
         pass_mbs: List[Tuple[MLMBatchElement]] = [
-            MLMBatchElement(passages.input_ids[i], passages.mask[i], passages.mlm_labels[i])\
+            MLMBatchElement(passages.input_ids[i], passages.mask[i],
+                passages.mlm_input_ids[i], passages.mlm_labels[i])\
                 for i in microbatch_inds
         ]
         rev_mbs: List[Tuple[MLMBatchElement]] = [
-            MLMBatchElement(reviews.input_ids[i], reviews.mask[i], reviews.mlm_labels[i])\
+            MLMBatchElement(reviews.input_ids[i], reviews.mask[i],
+                reviews.mlm_input_ids[i], reviews.mlm_labels[i])\
                  for i in microbatch_inds
         ]
         self.zero_grad(opt)

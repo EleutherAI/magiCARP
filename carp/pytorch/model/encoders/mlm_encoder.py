@@ -50,11 +50,10 @@ class MLMEncoder(BaseEncoder):
             padding=True,
         )
 
-    def forward(self, x, mask = None, labels = None):
-        out = {}
+    def forward(self, input_ids, mask = None, mlm_input_ids = None, labels = None):
         if not labels is None:
             model_output = self.model(
-                    input_ids = x, 
+                    input_ids = mlm_input_ids, 
                     attention_mask = mask,
                     labels = labels,
                     output_hidden_states = True
@@ -62,7 +61,7 @@ class MLMEncoder(BaseEncoder):
             loss =  model_output['loss']
         else:
             model_output = self.model(
-                    input_ids = x, 
+                    input_ids = input_ids, 
                     attention_mask = mask,
                     output_hidden_states = True
             )

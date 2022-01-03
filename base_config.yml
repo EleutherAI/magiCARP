@@ -6,7 +6,7 @@ model:
   model_arch: "roberta"
   encoder_type: "MLMSumEncoder"
   grad_clip: -1.0
-  grad_accum: 2
+  grad_accum: 4
   momentum: 0.0
   device: "cuda"
 

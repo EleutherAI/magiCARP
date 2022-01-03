@@ -31,6 +31,9 @@ class MLMOrchestrator(BaseOrchestrator):
             self.train_config.batch_size = 2048
             # reset the LR scheduler
             scheduler = LambdaLR(opt, get_scheduling_func(self.train_config))
+            # change the gradient accum steps to 1
+            model.config.grad_accum = 1
+            
         self.epoch_number += 1
         return model, scheduler, opt
     
