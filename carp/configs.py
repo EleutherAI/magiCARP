@@ -14,6 +14,7 @@ class ModelConfig:
     momentum: float
     device: str
     grad_clip: float  # What to clip grad norms to (set to -1 for no clip)
+    grad_accum: int
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

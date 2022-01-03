@@ -44,7 +44,10 @@ patch_typeguard()
 class BaseModel(nn.Module):
     """Abstract class that defines the basic API used for the different contrastive models."""
 
-    def __init__(self):
+    def __init__(self, config):
+        # used to count the number of steps until the next accumulation 
+        self.accum_step = 0
+        self.config = config
         super().__init__()
         
     def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
@@ -145,6 +148,22 @@ class BaseModel(nn.Module):
         scaler: torch.cuda.amp.GradScaler,
     ) -> Dict[str, TensorType[()]]:
         raise NotImplementedError("Must be overridden.")
+
+    # used to account for gradient accumulations
+    def zero_grad(self,
+        opt : torch.optim.Optimizer):
+        if self.accum_step % self.config.grad_accum == 0:
+            opt.zero_grad()
+    def step(self,
+        scaler : torch.cuda.amp.GradScaler,
+        opt: torch.optim.Optimizer):
+        if self.accum_step % self.config.grad_accum == 0:
+            scaler.step(opt)
+            scaler.update()
+            self.accum_step = 0
+        else:
+            self.accum_step += 1
+
 
     def eval_step(self, dataset):
         passages = []

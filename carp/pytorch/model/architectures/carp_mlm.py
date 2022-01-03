@@ -22,8 +22,7 @@ patch_typeguard()
 @register_architecture
 class CARPMLM(BaseModel):
     def __init__(self, config: ModelConfig):
-        super().__init__()
-        self.config = config
+        super().__init__(config)
         encoder_class = get_encoder(config.encoder_type)
         self.passage_encoder = encoder_class(
             config.model_path, config.model_arch
@@ -31,14 +30,14 @@ class CARPMLM(BaseModel):
         self.review_encoder = encoder_class(
             config.model_path, config.model_arch
         )
-        self.latent_dim = self.config.latent_dim
-        self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
+        self.latent_dim = config.latent_dim
+        self.pass_projector, self.rev_projector = self._make_projection_layers(config)
         self.logit_scale = nn.Parameter(
-            torch.ones([], device=self.config.device)
-            * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
+            torch.ones([], device=config.device)
+            * torch.log(torch.tensor([1 / 0.07], device=config.device))
         )
-        self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
-        self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
+        self.clamp_min = torch.log(torch.tensor([1 / 100], device=config.device))
+        self.clamp_max = torch.log(torch.tensor([100], device=config.device))
 
         self.mlm_mode = True
 
@@ -55,6 +54,32 @@ class CARPMLM(BaseModel):
         if not self.mlm_mode:
             return projector(x)
         return x
+    # overridden to decrease memory footprint
+    def calculate_embeddings(
+        self,
+        passages: Iterable[
+            Tuple[
+                BatchElement
+            ]
+        ],
+        reviews: Iterable[
+            Tuple[
+                BatchElement
+            ]
+        ],
+        return_only_embeddings : bool = True,
+    ):
+        # Get encodings without grad
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            pass_encs = [self.encode_passages(p) for p in passages]
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            rev_encs = [self.encode_reviews(r) for r in reviews]
+
+        # if we only need the embeddings, fetch them
+        if return_only_embeddings:
+            pass_encs = list(map(lambda x: x.hidden, pass_encs))
+            rev_encs = list(map(lambda x: x.hidden, rev_encs))
+        return pass_encs, rev_encs
 
     def train_step(
         self,
@@ -79,7 +104,8 @@ class CARPMLM(BaseModel):
             MLMBatchElement(reviews.input_ids[i], reviews.mask[i], reviews.mlm_labels[i])\
                  for i in microbatch_inds
         ]
-        opt.zero_grad()
+        self.zero_grad(opt)
+
         if self.mlm_mode:
             with torch.cuda.amp.autocast():
                 loss_pass = [self.encode_passages(p).loss for p in pass_mbs]
@@ -87,10 +113,9 @@ class CARPMLM(BaseModel):
             with torch.cuda.amp.autocast():
                 loss_rev = [self.encode_reviews(r).loss for r in rev_mbs]
             [scaler.scale(l).backward() for l in loss_rev]
-            scaler.step(opt)
-            scaler.update()
+            self.step(scaler, opt)
 
-            mlm_loss = (sum(loss_pass) + sum(loss_rev)) / (passages.input_ids.shape[0] * 2)
+            mlm_loss = (sum(loss_pass) + sum(loss_rev)) / (passages.input_ids.shape[0] // config.microbatch_size)
             return {
                 "Loss/MLM" : mlm_loss,
                 "Loss/Train" : mlm_loss
@@ -128,8 +153,7 @@ class CARPMLM(BaseModel):
             scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
 
-        scaler.step(opt)
-        scaler.update()
+        self.step(scaler, opt)
         return {
             "Loss/Contrastive": loss,
             "Loss/Train": loss,

@@ -59,7 +59,9 @@ class CARP(BaseModel):
         #compute accuracy
         forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
 
-        opt.zero_grad()
+        # does gradient accumulation
+        self.zero_grad(opt)
+
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
             passage, mask = passage
@@ -89,8 +91,9 @@ class CARP(BaseModel):
             scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
 
-        scaler.step(opt)
-        scaler.update()
+        # does 
+        self.step(scaler, opt)
+        
         return {
             "Loss/Train": loss,
             "Acc/Forward": forward_acc,
