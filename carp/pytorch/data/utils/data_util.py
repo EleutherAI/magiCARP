@@ -2,7 +2,7 @@ from typing import List, Optional, Callable, Iterable, Tuple
 from transformers.tokenization_utils_base import BatchEncoding
 from typeguard import typechecked
 from torchtyping import TensorType
-
+from dataclasses import dataclass
 
 def check_char(char):
     """Check if char can be encoded"""
@@ -81,5 +81,8 @@ def create_tok(tokenizer : Callable, context_len : int):
         return tokenizer(string_batch)
     return _tok
 
-TokMaskTuplePass = Tuple[TensorType["batch", "pass_N"], TensorType["batch", "pass_N"]]
-TokMaskTupleRev = Tuple[TensorType["batch", "rev_N"], TensorType["batch", "rev_N"]]
+@dataclass
+class BatchElement:
+    input_ids : TensorType["batch", "pass_N"] 
+    mask : TensorType["batch", "pass_N"] 
+    

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Iterable, Callable, List
+from typing import Dict, Tuple, Iterable, List
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
@@ -11,8 +9,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from carp.util import batch_data
-from carp.configs import ModelConfig, TrainConfig
+from carp.pytorch.data.utils.data_util import BatchElement
+from carp.configs import TrainConfig
 
 # specifies a dictionary of architectures
 _ARCHITECTURES: Dict[str, any] = {}  # registry
@@ -103,11 +101,13 @@ class BaseModel(nn.Module):
         masks: TensorType["batch_dim", -1],
         encoder,
         projector,
-    ) -> TensorType["batch_dim", "latent_dim"]:
+    ):
         x = encoder(x.to(self.device), masks.to(self.device))
         return projector(x)
 
     def encode_reviews(self, x, masks=None):
+        print(x.shape)
+        print(masks.shape)
         return self._embed_data(x, masks, self.review_encoder, self.rev_projector)
 
     def encode_passages(self, x, masks=None):
@@ -123,10 +123,7 @@ class BaseModel(nn.Module):
         reviews: Iterable[
             Tuple[TensorType[-1, "N_rev"], TensorType[-1, "N_rev"]]
         ],
-    ) -> Tuple[
-        List[TensorType[-1, "latent_dim"]],
-        List[TensorType[-1, "latent_dim"]],
-    ]:
+    ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(*p) for p in passages]
@@ -135,8 +132,8 @@ class BaseModel(nn.Module):
 
     def train_step(
         self,
-        passages: List[TensorType["batch", "N_pass"]],
-        reviews: List[TensorType["batch", "N_rev"]],
+        passages: BatchElement,
+        reviews: BatchElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
         scaler: torch.cuda.amp.GradScaler,
@@ -179,6 +176,7 @@ class Projection(nn.Module):
 from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
+from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]

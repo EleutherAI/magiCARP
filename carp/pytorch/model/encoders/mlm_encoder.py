@@ -31,6 +31,8 @@ class MLMEncoder(BaseEncoder):
 
     def flag_encode(self): self.encode_flag = True
     def flag_mlm(self): self.encode_flag = False
+    def encode_mode(self): return self.encode_flag
+    def mlm_mode(self): return not self.encode_flag
 
     @property
     def device(self):
@@ -75,7 +77,9 @@ class MLMSumEncoder(MLMEncoder):
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
-    def process_hidden_state(self, hidden: TensorType['batch', 'N', 'embed_dim'], mask: TensorType['batch', 'N']) -> TensorType['batch', 'embed_dim']:
+    def process_hidden_state(self,
+        hidden: TensorType['batch', 'N', 'embed_dim'],
+        mask: TensorType['batch', 'N']) -> TensorType['batch', 'embed_dim']:
         if mask != None:
             emb_mask = mask.unsqueeze(2).repeat(1, 1, self.d_model)
             hidden = hidden * emb_mask

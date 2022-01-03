@@ -5,7 +5,7 @@ from typing import Any, Dict, Tuple, Iterable, Callable
 
 from datasets import load_from_disk
 from torch.utils.data import Dataset
-from carp.pytorch.data.utils.data_util import create_tok, TokMaskTuplePass, TokMaskTupleRev
+from carp.pytorch.data.utils.data_util import create_tok, BatchElement
 from typeguard import typechecked
 from functools import partial
 
@@ -98,7 +98,7 @@ class BaseDataPipeline(Dataset):
         @typechecked
         def collate(
             data: Iterable[Tuple[str, str]]
-        ) -> Tuple[TokMaskTuplePass, TokMaskTupleRev]:
+        ) -> Tuple[BatchElement, BatchElement]:
             passages, reviews = zip(*data)
             pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
             pass_masks = pass_tokens["attention_mask"]
@@ -106,8 +106,8 @@ class BaseDataPipeline(Dataset):
             pass_tokens = pass_tokens["input_ids"]
             rev_tokens = rev_tokens["input_ids"]
             return (
-                (pass_tokens, pass_masks),
-                (rev_tokens, rev_masks),
+                BatchElement(pass_tokens, pass_masks),
+                BatchElement(rev_tokens, rev_masks),
             )
 
         return collate

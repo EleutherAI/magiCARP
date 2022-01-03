@@ -2,6 +2,15 @@ from carp.pytorch.data import *
 from carp.pytorch.model.encoders import BaseEncoder
 from transformers.data.data_collator import DataCollatorForLanguageModeling
 
+from dataclasses import dataclass
+from torchtyping import TensorType
+
+
+@dataclass
+class MLMBatchElement(BatchElement):
+    mlm_labels : TensorType["batch", "pass_N"]
+
+
 @register_datapipeline
 class MLMDataPipeline(BaseDataPipeline):
     
@@ -29,7 +38,7 @@ class MLMDataPipeline(BaseDataPipeline):
         @typechecked
         def collate(
             data: Iterable[Tuple[str, str]]
-        ) -> Tuple[TokMaskTuplePass, TokMaskTupleRev]:
+        ) -> Tuple[MLMBatchElement, MLMBatchElement]:
             passages, reviews = zip(*data)
             pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
             pass_masks = pass_tokens["attention_mask"]
@@ -41,8 +50,8 @@ class MLMDataPipeline(BaseDataPipeline):
             rev_tokens, rev_labels = mlm_collator.torch_mask_tokens(rev_tokens)
 
             return (
-                (pass_tokens, pass_labels, pass_masks),
-                (rev_tokens, rev_labels, rev_masks),
+                MLMBatchElement(pass_tokens, pass_masks, pass_labels),
+                MLMBatchElement(rev_tokens, rev_masks, rev_labels),
             )
 
         return collate

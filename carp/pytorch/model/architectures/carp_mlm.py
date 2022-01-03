@@ -2,11 +2,14 @@ import torch
 import torch.nn.functional as F
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
+from dataclasses import dataclass
 from carp.configs import CARPConfig, ModelConfig, TrainConfig
+from carp.pytorch.data.mlm_pipeline import MLMBatchElement
 from carp.pytorch.model.architectures import * 
 from carp.pytorch.model.encoders import get_encoder
 from carp.util import mbTokens, generate_indices
 from typing import List
+
 
 
 # CARP MLM differs from normal CARP since the first epoch will solely use an MLM objective to improve data efficiency. 
@@ -37,28 +40,55 @@ class CARPMLM(BaseModel):
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
+        self.mlm_mode = True
+
+    def _embed_data(
+        self,
+        x: TensorType["batch_dim", -1],
+        masks: TensorType["batch_dim", -1],
+        encoder,
+        projector,
+    ):
+        x = encoder(x.to(self.device), masks.to(self.device))
+        # if we are not in mlm mode, run the projection layer which is used for contrastive learning 
+        if not self.mlm_mode:
+            return projector(x)
+        return x
+
     def train_step(
         self,
-        passages: List[TensorType["batch", "N_pass"]],
-        reviews: List[TensorType["batch", "N_rev"]],
+        passages: MLMBatchElement,
+        reviews: MLMBatchElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
-        scaler: torch.cuda.amp.GradScaler,
+        scaler: torch.cuda.amp.GradScaler
     ) -> Dict[str, TensorType[()]]:
+
+
+        
         microbatch_inds = generate_indices(
-            passages[0].shape[0], config.microbatch_size, shuffle=False
+            passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
         pass_mbs: List[Tuple[mbTokens, mbTokens]] = [
-            (passages[0][i], passages[1][i]) for i in microbatch_inds
+            (passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
         ]
         rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
-            (reviews[0][i], reviews[1][i]) for i in microbatch_inds
+            (reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
         ]
+        print(len(pass_mbs))
+        
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 
         opt.zero_grad()
+
+        if self.mlm_mode:
+            # compute an MLM head
+            #print(pass_encs)
+            #print(rev_encs)
+            return None
+
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
             passage, mask = passage
