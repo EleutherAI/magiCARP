@@ -114,13 +114,18 @@ class CARPMLM(BaseModel):
         ]
         self.zero_grad(opt)
 
+        def accum_every_mb(inp : MLMBatchElement, passage : bool = True):
+            with torch.cuda.amp.autocast():
+                if passage:
+                    loss = self.encode_passages(inp).loss
+                else:
+                    loss = self.encode_reviews(inp).loss
+            scaler.scale(loss).backward()
+            return loss.detach()
+
         if self.mlm_mode:
-            with torch.cuda.amp.autocast():
-                loss_pass = [self.encode_passages(p).loss for p in pass_mbs]
-            [scaler.scale(l).backward() for l in loss_pass]
-            with torch.cuda.amp.autocast():
-                loss_rev = [self.encode_reviews(r).loss for r in rev_mbs]
-            [scaler.scale(l).backward() for l in loss_rev]
+            loss_pass = [accum_every_mb(p) for p in pass_mbs]
+            loss_rev = [accum_every_mb(r, False) for r in rev_mbs]
             self.step(scaler, opt)
 
             mlm_loss = (sum(loss_pass) + sum(loss_rev)) / (passages.input_ids.shape[0] // config.microbatch_size)
@@ -154,7 +159,7 @@ class CARPMLM(BaseModel):
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )
             scaler.scale(loss).backward()
-            
+
         # Clipping
         if self.config.grad_clip != -1:
             scaler.unscale_(opt)

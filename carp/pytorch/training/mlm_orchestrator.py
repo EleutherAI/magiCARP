@@ -14,9 +14,9 @@ from carp.util import get_scheduling_func
 @register_orchestrator
 class MLMOrchestrator(BaseOrchestrator):
     def __init__(self, config: TrainConfig):
-        self.step_number = 0
+        self.epoch_number = 0
         super().__init__(config)
-    
+    """
     def after_train_step(self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs)\
         -> Tuple[BaseModel, _LRScheduler, Optimizer]:
 
@@ -54,4 +54,4 @@ class MLMOrchestrator(BaseOrchestrator):
 
         self.epoch_number += 1
         return model, scheduler, opt
-    """
+
