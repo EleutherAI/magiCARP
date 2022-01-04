@@ -16,7 +16,7 @@ patch_typeguard()
 @register_architecture
 class CARP(BaseModel):
     def __init__(self, config: ModelConfig):
-        super().__init__()
+        super().__init__(config)
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
         self.passage_encoder = encoder_class(
@@ -46,11 +46,11 @@ class CARP(BaseModel):
             passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[BatchElement]] = [
-            (passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
+        pass_mbs: List[BatchElement] = [
+            BatchElement(passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[BatchElement]] = [
-            (reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
+        rev_mbs: List[BatchElement] = [
+            BatchElement(reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
         ]
 
         # Initially get all encodings without grad
@@ -64,24 +64,19 @@ class CARP(BaseModel):
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
-            passage, mask = passage
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.encode_passages(
-                    passage.to(self.device), mask.to(self.device)
-                )
+                pass_tmp[index] = self.encode_passages(passage).hidden
                 loss  = self.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(rev_encs)
                 )
             scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(rev_mbs):
-            review, mask = review
             rev_tmp = rev_encs.copy()  # no_grad
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.encode_reviews(
-                    review.to(self.device), mask.to(self.device)
-                )  # grad _just_ at positions in `index`
+                rev_tmp[index] = self.encode_reviews(review).hidden  
+                # grad _just_ at positions in `index`
                 loss = self.contrastive_loss(
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )

@@ -57,8 +57,8 @@ class CARPMLM(BaseModel):
                 x.mask.to(self.device),
                 None)
             # if we are not in mlm mode, run the projection layer which is used for contrastive learning 
-            if not self.mlm_mode:
-                return projector(x)
+            x.hidden = projector(x.hidden)
+            return x
         return x
     # overridden to decrease memory footprint
     def calculate_embeddings(
@@ -102,12 +102,12 @@ class CARPMLM(BaseModel):
             passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
         # Split batch elements into smaller batch elements 
-        pass_mbs: List[Tuple[MLMBatchElement]] = [
+        pass_mbs: List[MLMBatchElement] = [
             MLMBatchElement(passages.input_ids[i], passages.mask[i],
                 passages.mlm_input_ids[i], passages.mlm_labels[i])\
                 for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[MLMBatchElement]] = [
+        rev_mbs: List[MLMBatchElement] = [
             MLMBatchElement(reviews.input_ids[i], reviews.mask[i],
                 reviews.mlm_input_ids[i], reviews.mlm_labels[i])\
                  for i in microbatch_inds
@@ -131,27 +131,31 @@ class CARPMLM(BaseModel):
                 
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
-
+        print(len(pass_encs))
+        print(len(rev_encs))
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
-            passage, mask = passage
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.encode_passages(
-                    passage.to(self.device), mask.to(self.device)
-                )
+                pass_tmp[index] = self.encode_passages(passage).hidden
+                print("pass_tmp")
+                for i in pass_tmp:
+                    print(i.shape)
+                print("rev_encs")
+                for j in rev_encs:
+                    print(j.shape)
+                print(pass_tmp[index].shape)
+                print(rev_encs[index].shape)
                 loss, forward_acc = self.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(rev_encs)
                 )
             scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(rev_mbs):
-            review, mask = review
             rev_tmp = rev_encs.copy()  # no_grad
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.encode_reviews(
-                    review.to(self.device), mask.to(self.device)
-                )  # grad _just_ at positions in `index`
+                rev_tmp[index] = self.encode_reviews(review).hidden
+                 # grad _just_ at positions in `index`
                 loss, _ = self.contrastive_loss(
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )

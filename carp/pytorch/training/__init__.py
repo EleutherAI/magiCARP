@@ -49,6 +49,7 @@ class BaseOrchestrator:
 
     def __init__(self, train_config : TrainConfig):
         self.train_config = train_config
+        self.force_break = False
     
     # if the child class does not override a trigger, just ignore it
     #TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though 
