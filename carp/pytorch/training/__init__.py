@@ -115,7 +115,7 @@ class BaseOrchestrator:
         sampler = RandomSampler(dataset)
         return DataLoader(
                     dataset,
-                    batch_size=self.train_config.microbatch_size,
+                    batch_size=self.train_config.batch_size,
                     sampler=sampler,
                     collate_fn=tokenizer,
                 )
