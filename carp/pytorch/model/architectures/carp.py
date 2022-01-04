@@ -86,9 +86,7 @@ class CARP(BaseModel):
             scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
 
-        # does 
         self.step(scaler, opt)
-        
         return {
             "Loss/Train": loss,
             "Acc/Forward": forward_acc,

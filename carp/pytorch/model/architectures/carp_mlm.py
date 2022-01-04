@@ -131,22 +131,16 @@ class CARPMLM(BaseModel):
                 
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
-        print(len(pass_encs))
-        print(len(rev_encs))
+
+        #compute accuracy
+        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
+
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
                 pass_tmp[index] = self.encode_passages(passage).hidden
-                print("pass_tmp")
-                for i in pass_tmp:
-                    print(i.shape)
-                print("rev_encs")
-                for j in rev_encs:
-                    print(j.shape)
-                print(pass_tmp[index].shape)
-                print(rev_encs[index].shape)
-                loss, forward_acc = self.contrastive_loss(
+                loss = self.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(rev_encs)
                 )
             scaler.scale(loss).backward()
@@ -156,10 +150,11 @@ class CARPMLM(BaseModel):
             with torch.cuda.amp.autocast():
                 rev_tmp[index] = self.encode_reviews(review).hidden
                  # grad _just_ at positions in `index`
-                loss, _ = self.contrastive_loss(
+                loss = self.contrastive_loss(
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )
             scaler.scale(loss).backward()
+            
         # Clipping
         if self.config.grad_clip != -1:
             scaler.unscale_(opt)
