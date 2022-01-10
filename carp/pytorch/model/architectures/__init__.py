@@ -177,7 +177,7 @@ class BaseModel(nn.Module):
         reviews = chunkBatchElement(reviews[0], 8)
 
         with torch.no_grad():
-            pass_emb, rev_emb = self.calculate_embeddings(passages, reviews) # <--- crash here
+            pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
             val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
             val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
 
