@@ -3,6 +3,8 @@ from transformers.tokenization_utils_base import BatchEncoding
 from typeguard import typechecked
 from torchtyping import TensorType
 from dataclasses import dataclass
+import torch
+import math
 
 def check_char(char):
     """Check if char can be encoded"""
@@ -85,4 +87,53 @@ def create_tok(tokenizer : Callable, context_len : int):
 class BatchElement:
     input_ids : TensorType[-1, "pass_N"] 
     mask : TensorType[-1, "pass_N"] 
+
+# Assumes first axis of all tensor attributes in data are the same
+# If no tensor attributes, returns original data object
+def chunkBatchElement(data : BatchElement, chunk_size : int) -> List[BatchElement]:
+    keys = list(vars(data).keys())
+    n_keys = len(keys)
+    is_tensor = []
+    tensor_batch_dim = -1
+
+    # Create data of same type as data
+    data_class = type(data)
+
+    # Mark which attrs are tensor types
+    for key in keys:
+        if torch.is_tensor(vars(data)[key]):
+            is_tensor.append(True)
+        else:
+            is_tensor.append(False)
     
+    # If no tensor type just return
+    has_tensor = False
+    for t in is_tensor:
+        if t:
+            has_tensor = True
+            break
+    if not has_tensor: return data
+
+    # Check length of tensor type
+    for is_t, key in zip(is_tensor, keys):
+        if is_t:
+            tensor_batch_dim = len(vars(data)[key])
+            break
+
+    # create indices for the chunks
+    n_chunks = math.ceil(tensor_batch_dim / chunk_size)
+    chunk_inds = torch.arange(tensor_batch_dim).chunk(n_chunks)
+
+    # create new BatchElements that have chunks
+    new_datas = []
+    for inds in chunk_inds:
+        data_args = []
+        for is_t, key in zip(is_tensor, keys):
+            if is_t:
+                data_args.append(vars(data)[key][inds])
+            else:
+                data_args.append(vars(data)[key])
+        
+        new_datas.append(data_class(*data_args))
+
+    return new_datas

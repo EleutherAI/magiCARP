@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from carp.pytorch.data.utils.data_util import BatchElement
+from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
 from carp.configs import TrainConfig
 
 # specifies a dictionary of architectures
@@ -132,7 +132,7 @@ class BaseModel(nn.Module):
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = [self.encode_reviews(r) for r in reviews]
-
+        
         # if we only need the embeddings, fetch them
         if return_only_embeddings:
             pass_encs = list(map(lambda x: x.hidden, pass_encs))
@@ -171,11 +171,16 @@ class BaseModel(nn.Module):
         for p, r in dataset:
             passages.append(p)
             reviews.append(r)
-        with torch.no_grad():
-            pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
+        
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        reviews = chunkBatchElement(reviews[0], 8)
 
+        with torch.no_grad():
+            pass_emb, rev_emb = self.calculate_embeddings(passages, reviews) # <--- crash here
             val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
             val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
+
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
 
