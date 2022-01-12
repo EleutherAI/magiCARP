@@ -43,8 +43,8 @@ def hopfield(state_patterns, stored_patterns, hopfield_scale):
 patch_typeguard()
 
 @typechecked
-@register_architecture("CARP Cloob")
-class CARPCloob(ContrastiveModel):
+@register_architecture
+class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
@@ -88,8 +88,8 @@ class CARPCloob(ContrastiveModel):
 
     def train_step(
         self,
-        passages: List[TensorType["batch", "N_pass"]],
-        reviews: List[TensorType["batch", "N_rev"]],
+        passages: BatchElement,
+        reviews: BatchElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
         scaler: torch.cuda.amp.GradScaler,
@@ -98,10 +98,10 @@ class CARPCloob(ContrastiveModel):
             passages[0].shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        pass_mbs: List[Tuple[BatchElement]] = [
             (passages[0][i], passages[1][i]) for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        rev_mbs: List[Tuple[BatchElement]] = [
             (reviews[0][i], reviews[1][i]) for i in microbatch_inds
         ]
         

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, Tuple, Iterable, Union, List
 from torchtyping import TensorType
 
@@ -29,6 +29,12 @@ def register_encoder(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
+    
+    cls = name
+    name = cls.__name__
+    register_class(cls, name.lower())
+
+    return cls
 
 def extract_neo(output: Dict[str, Any]) -> TensorType['batch', -1, 'embed_dim']:
     return output["hidden_states"][-2]
@@ -41,19 +47,30 @@ def extract_roberta(output: Tuple) -> TensorType['batch', -1, 'embed_dim']:
 Device = Union[str, torch.DeviceObjType]
 
 
+@dataclass
+class BaseEncoderOutput():
+    hidden : TensorType['batch', 'embed_dim']
+
+
 class BaseEncoder(nn.Module):
 
     # For different models, hidden state is returned differently
     extract_fns = {"neo": extract_neo, "roberta": extract_roberta}
 
-    def __init__(self, model_path: str, model_arch: str):
+    def __init__(self, model_path: str, model_arch: str, skip_init : bool = False):
         super().__init__()
-        self.model = AutoModel.from_pretrained(model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.extract_fn = self.extract_fns.get(model_arch)
         self.cfg = AutoConfig.from_pretrained(model_path)
         self.d_model = self.cfg.hidden_size
-    
+
+        if not skip_init:
+            self.model = AutoModel.from_pretrained(model_path)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+            # add quote token to model and tokenizer
+            self.tokenizer.add_tokens(["[quote]"])
+            self.model.resize_token_embeddings(len(self.tokenizer))
+
     @property
     def device(self):
         return self.model.device
@@ -62,7 +79,7 @@ class BaseEncoder(nn.Module):
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         pass
 
-    def tok(self, string_batch: Iterable[str]):
+    def call_tokenizer(self, string_batch: Iterable[str]):
         return self.tokenizer(
             self.preprocess(string_batch),
             return_tensors='pt',  # Will they ever _not_ be pytorch tensors?
@@ -78,7 +95,8 @@ class BaseEncoder(nn.Module):
         t = t.argmax(1)
         return t
 
-from carp.pytorch.model.encoders.encoder import *
+from carp.pytorch.model.encoders.pool_encoder import *
+from carp.pytorch.model.encoders.mlm_encoder import *
 
 def get_encoder(name):
     return _ENCODERS[name.lower()]

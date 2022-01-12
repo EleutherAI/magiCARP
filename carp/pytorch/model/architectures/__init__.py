@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Iterable, Callable, List
+from typing import Dict, Tuple, Iterable, List
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
@@ -11,8 +9,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from carp.util import batch_data
-from carp.configs import ModelConfig, TrainConfig
+from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
+from carp.configs import TrainConfig
 
 # specifies a dictionary of architectures
 _ARCHITECTURES: Dict[str, any] = {}  # registry
@@ -32,14 +30,24 @@ def register_architecture(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
+    
+    cls = name
+    name = cls.__name__
+    register_class(cls, name.lower())
+
+    return cls
+
 
 patch_typeguard()
 
 @typechecked
-class ContrastiveModel(nn.Module):
+class BaseModel(nn.Module):
     """Abstract class that defines the basic API used for the different contrastive models."""
 
-    def __init__(self):
+    def __init__(self, config):
+        # used to count the number of steps until the next accumulation 
+        self.accum_step = 0
+        self.config = config
         super().__init__()
         
     def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
@@ -92,49 +100,70 @@ class ContrastiveModel(nn.Module):
             
     def _embed_data(
         self,
-        x: TensorType["batch_dim", -1],
-        masks: TensorType["batch_dim", -1],
+        x: BatchElement, 
         encoder,
         projector,
-    ) -> TensorType["batch_dim", "latent_dim"]:
-        x = encoder(x.to(self.device), masks.to(self.device))
-        return projector(x)
+    ):
+        x = encoder(x.input_ids.to(self.device), x.mask.to(self.device))
+        x.hidden = projector(x.hidden)
+        return x
 
-    def encode_reviews(self, x, masks=None):
-        return self._embed_data(x, masks, self.review_encoder, self.rev_projector)
+    def encode_reviews(self, x):
+        return self._embed_data(x, self.review_encoder, self.rev_projector)
 
-    def encode_passages(self, x, masks=None):
-        return self._embed_data(x, masks, self.passage_encoder, self.pass_projector)
+    def encode_passages(self, x):
+        return self._embed_data(x, self.passage_encoder, self.pass_projector)
 
     def calculate_embeddings(
         self,
         passages: Iterable[
             Tuple[
-                TensorType[-1, "N_pass"], TensorType[-1, "N_pass"]
+                BatchElement
             ]
         ],
         reviews: Iterable[
-            Tuple[TensorType[-1, "N_rev"], TensorType[-1, "N_rev"]]
+            Tuple[
+                BatchElement
+            ]
         ],
-    ) -> Tuple[
-        List[TensorType[-1, "latent_dim"]],
-        List[TensorType[-1, "latent_dim"]],
-    ]:
+        return_only_embeddings : bool = True,
+    ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
-            pass_encs = [self.encode_passages(*p) for p in passages]
-            rev_encs = [self.encode_reviews(*r) for r in reviews]
+            pass_encs = [self.encode_passages(p) for p in passages]
+            rev_encs = [self.encode_reviews(r) for r in reviews]
+        
+        # if we only need the embeddings, fetch them
+        if return_only_embeddings:
+            pass_encs = list(map(lambda x: x.hidden, pass_encs))
+            rev_encs = list(map(lambda x: x.hidden, rev_encs))
         return pass_encs, rev_encs
 
     def train_step(
         self,
-        passages: List[TensorType["batch", "N_pass"]],
-        reviews: List[TensorType["batch", "N_rev"]],
+        passages: BatchElement,
+        reviews: BatchElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
         scaler: torch.cuda.amp.GradScaler,
     ) -> Dict[str, TensorType[()]]:
         raise NotImplementedError("Must be overridden.")
+
+    # used to account for gradient accumulations
+    def zero_grad(self,
+        opt : torch.optim.Optimizer):
+        if self.accum_step % self.config.grad_accum == 0:
+            opt.zero_grad()
+    def step(self,
+        scaler : torch.cuda.amp.GradScaler,
+        opt: torch.optim.Optimizer):
+        if self.accum_step % self.config.grad_accum == 0:
+            scaler.step(opt)
+            scaler.update()
+            self.accum_step = 0
+        else:
+            self.accum_step += 1
+
 
     def eval_step(self, dataset):
         passages = []
@@ -142,10 +171,16 @@ class ContrastiveModel(nn.Module):
         for p, r in dataset:
             passages.append(p)
             reviews.append(r)
+        
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        reviews = chunkBatchElement(reviews[0], 8)
+
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
             val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
             val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
+
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
 
@@ -172,6 +207,7 @@ class Projection(nn.Module):
 from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
+from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]

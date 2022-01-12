@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from carp.clock import Clock
 from carp.configs import CARPConfig, TrainConfig
 from carp.util import get_scheduling_func
-from carp.pytorch.dataset import CarpDataset, tokenizer_factory
+from carp.pytorch.data import BaseDataPipeline
 from carp.pytorch.model import CARPMomentum
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -41,7 +41,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool):
 
 
 def get_datasets(config, data_path, random_seed):
-    carp = CarpDataset(config.dupe_protection, data_path)
+    carp = BaseDataPipeline(config.dupe_protection, data_path)
     size = len(carp)
     seed = torch.manual_seed(random_seed)
     if config.eval_selection == "random":
@@ -71,11 +71,11 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
 
 
 # Dataset assumed to be list of pairs on memory
-def train(model, dataset: CarpDataset, evalset: CarpDataset, config: TrainConfig, args):
+def train(model, dataset: BaseDataPipeline, evalset: BaseDataPipeline, config: TrainConfig, args):
     # Tokenizes string batch using encoder tokenizer
     LEARNING_RATE_INIT = config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
-    tokenizer = tokenizer_factory(model.passage_encoder.tok, config.n_ctx)
+    tokenizer = BaseDataPipeline.tokenizer_factory(model.passage_encoder.tok, config.n_ctx)
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0)
     scheduler = LambdaLR(opt, get_scheduling_func(config))
     scaler = torch.cuda.amp.GradScaler()

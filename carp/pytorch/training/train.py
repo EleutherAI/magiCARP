@@ -1,11 +1,12 @@
 from argparse import ArgumentParser
 from carp.clock import Clock
 from carp.configs import CARPConfig, TrainConfig
-
-from carp.pytorch.model.architectures import get_architecture, get_architecture_names
-from carp.pytorch.model.encoders import get_encoder_names
+from carp.pytorch.model.architectures import get_architecture
+from carp.pytorch.training import get_orchestrator
 from carp.util import get_scheduling_func
-from carp.pytorch.dataset import CarpDataset, tokenizer_factory
+from carp.pytorch.data import get_datapipeline, BaseDataPipeline
+from carp.pytorch.training import get_orchestrator, BaseOrchestrator
+from carp.pytorch.training.utils import print_available_configs
 
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -25,6 +26,8 @@ def get_arguments():
     parser.add_argument("--type", type=str, default="CARP")
     parser.add_argument("--get_architectures", action='store_true')
     parser.add_argument("--get_encoders", action='store_true')
+    parser.add_argument("--get_datapipelines", action='store_true')
+    parser.add_argument("--get_orchestrators", action='store_true')
     return parser
 
 
@@ -45,7 +48,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
 
 
 def get_datasets(config, data_path, random_seed=None):
-    carp = CarpDataset(config.dupe_protection, data_path)
+    carp = get_datapipeline(config.data_pipeline)(config.dupe_protection, data_path)
     size = len(carp)
 
     seed = torch.manual_seed(random_seed)
@@ -74,13 +77,20 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
 
 
 # Dataset assumed to be list of pairs on memory
-def train(model, dataset: CarpDataset, evalset: CarpDataset, config: TrainConfig, args):
+def train(model,
+    dataset: BaseDataPipeline,
+    evalset: BaseDataPipeline,
+    orchestrator : BaseOrchestrator,
+    args):
     # Tokenizes string batch using encoder tokenizer
-    LEARNING_RATE_INIT = config.learning_rate_init
+    LEARNING_RATE_INIT = orchestrator.train_config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
-    tokenizer = tokenizer_factory(model.passage_encoder.tok, config.n_ctx)
+
+    # setup data pipeline. model is needed 
+    tokenizer = orchestrator.construct_tokenizer(model.passage_encoder)
+
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0)
-    scheduler = LambdaLR(opt, get_scheduling_func(config))
+    scheduler = LambdaLR(opt, get_scheduling_func(orchestrator.train_config))
     scaler = torch.cuda.amp.GradScaler()
     if LOAD_CHECKPOINT:
         scheduler.load_state_dict(torch.load("./schedule.pt"))
@@ -88,56 +98,52 @@ def train(model, dataset: CarpDataset, evalset: CarpDataset, config: TrainConfig
     model.train()
     iteration = 0
     timer = Clock()
-    for epoch in range(config.epochs):
-        train_sampler = RandomSampler(dataset)
-        train_data = DataLoader(
-            dataset,
-            batch_size=config.batch_size,
-            sampler=train_sampler,
-            num_workers=3,
-            collate_fn=tokenizer,
-            pin_memory=True,
+    for epoch in range(orchestrator.train_config.epochs):
+        model, scheduler, opt = orchestrator.on_epoch_start(model, scheduler, opt)
+        train_data = orchestrator.construct_dataloader(dataset, tokenizer)
 
-        )
         for passages, reviews in train_data:
             timer.hit()
-            batch_outputs = model.train_step(passages, reviews, config, opt, scaler)
+            model, scheduler, opt = orchestrator.before_train_step(model, scheduler, opt)
+            batch_outputs = model.train_step(passages, reviews, orchestrator.train_config, opt, scaler)
+            model, scheduler, opt = orchestrator.after_train_step(model, scheduler, opt)
+
             back_time = timer.hit()
             # Logging (in terminal and on WANDB)
             timer.hit()
             batch_outputs["Time/Batch"] = back_time
-            if config.do_log:
+            if orchestrator.train_config.do_log:
                 wandb.log(batch_outputs, commit=False)
-            if iteration % config.log_interval == 0:
+            if iteration % orchestrator.train_config.log_interval == 0:
                 print(
-                    f'EPOCH [{epoch}/{config.epochs}]\nBatch Loss: {batch_outputs["Loss/Train"].item()}'
+                    f'EPOCH [{epoch}/{orchestrator.train_config.epochs}]\nBatch Loss: {batch_outputs["Loss/Train"].item()}'
                 )
-                if config.do_log:
+                if orchestrator.train_config.do_log:
                     wandb.log(batch_outputs, commit=True)
             # Checkpoint model and scheduler
-            if iteration % config.checkpoint_interval == 0:
-                save_iter = iteration % (20 * config.checkpoint_interval) == 0
+            if iteration % orchestrator.train_config.checkpoint_interval == 0:
+                save_iter = iteration % (20 * orchestrator.train_config.checkpoint_interval) == 0
+                model, scheduler, opt = orchestrator.before_save(model, scheduler, opt)
                 save_checkpoint(model, scheduler, opt, iteration, save_iter)
+                model, scheduler, opt = orchestrator.after_save(model, scheduler, opt)
             # Run on eval set
-            if iteration % config.validate_interval == 0:
+            if iteration % orchestrator.train_config.validate_interval == 0:
                 print("VALIDATING...")
                 model.eval()
-                eval_sampler = RandomSampler(evalset)
-                eval_data = DataLoader(
-                    evalset,
-                    batch_size=config.microbatch_size,
-                    sampler=eval_sampler,
-                    collate_fn=tokenizer,
-                )
+                model, scheduler, opt = orchestrator.before_validate_step(model, scheduler, opt)
+                eval_data = orchestrator.construct_dataloader(evalset, tokenizer)
+
                 eval_out = model.eval_step(eval_data)
+                model, scheduler, opt = orchestrator.after_validate_step(model, scheduler, opt)
                 print(f"Validation Avg Loss: {eval_out['Loss/Validation']}")
                 print(f"Validation Avg Accuracy: {eval_out['Acc/Validation']}")
-                if config.do_log:
+                if orchestrator.train_config.do_log:
                     wandb.log(eval_out)
                 model.train()
             iteration += 1
             scheduler.step()
             model.clamp()
+        
 
 
 def param_count(model):
@@ -147,21 +153,12 @@ def param_count(model):
 if __name__ == "__main__":
     parser = get_arguments()
     args, _ = parser.parse_known_args()
-
-    if args.get_architectures:
-        print("FORMAT: Architecture") 
-        print("Available architectures are:")
-        print("***************")
-        print("\n".join(get_architecture_names()))
-    elif args.get_encoders:
-        print("FORMAT: Encoder")
-        print("Available encoders are:")
-        print("***************")
-        print("\n".join(get_encoder_names()))
-    else:
+    # if we are not trying to print an available configuration, continue with training
+    if not print_available_configs(args):
         config = CARPConfig.load_yaml(args.config_path)
         train_config = config.train_job
         model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path)
+        orchestrator = get_orchestrator(train_config.orchestrator)(train_config)
         print("N Parameters: " + str(param_count(model)))
         # Logging stuff
         if train_config.do_log:
@@ -173,4 +170,4 @@ if __name__ == "__main__":
             wandb.config.update({'seed': args.seed})
             wandb.watch(model)
         dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
-        train(model, dataset, evalset, train_config, args)
+        train(model, dataset, evalset, orchestrator, args)

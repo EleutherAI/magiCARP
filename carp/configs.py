@@ -14,6 +14,7 @@ class ModelConfig:
     momentum: float
     device: str
     grad_clip: float  # What to clip grad norms to (set to -1 for no clip)
+    grad_accum: int
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -35,6 +36,8 @@ class TrainConfig:
     checkpoint_interval: int
     validate_interval: int
     eval_selection: str
+    data_pipeline : str
+    orchestrator : str
     # Dataset sometimes contains short reviews like "lol"
     # These are harmful during training because if a batch contains more than one
     # then the duplicates will create exploding gradients through CE loss

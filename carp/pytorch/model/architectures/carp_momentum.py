@@ -11,8 +11,8 @@ from typing import List
 patch_typeguard()
 
 @typechecked
-@register_architecture("CARP Momentum")
-class CARPMomentum(ContrastiveModel):
+@register_architecture
+class CARPMomentum(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
@@ -87,27 +87,36 @@ class CARPMomentum(ContrastiveModel):
         loss = -torch.sum(F.log_softmax(logits, dim=1) * target, dim=1).mean() / 2
         return loss
 
-    def encode_reviews_m(self, x, masks=None):
-        return self._embed_data(x, masks, self.review_encoder_m, self.rev_projector_m)
+    def encode_reviews_m(self, x):
+        return self._embed_data(x, self.review_encoder_m, self.rev_projector_m)
 
-    def encode_passages_m(self, x, masks=None):
-        return self._embed_data(x, masks, self.passage_encoder_m, self.pass_projector_m)
+    def encode_passages_m(self, x):
+        return self._embed_data(x, self.passage_encoder_m, self.pass_projector_m)
 
     def momentum_embeddings(
         self,
         passages: Iterable[
             Tuple[
-                TensorType["microbatch", "N_pass"], TensorType["microbatch", "N_pass"]
+                BatchElement
             ]
         ],
         reviews: Iterable[
-            Tuple[TensorType["microbatch", "N_rev"], TensorType["microbatch", "N_rev"]]
+            Tuple[
+                BatchElement
+            ]
         ],
-    ) -> Tuple[TensorType["batch", "latent_dim"], TensorType["batch", "latent_dim"]]:
+        return_only_embeddings : bool = True,
+    ):
         self._momentum_update()
         with torch.no_grad(), torch.cuda.amp.autocast():
-            pass_encs = [self.encode_passages_m(*p) for p in passages]
-            rev_encs = [self.encode_reviews_m(*r) for r in reviews]
+            pass_encs = [self.encode_passages_m(p) for p in passages]
+            rev_encs = [self.encode_reviews_m(r) for r in reviews]
+
+        # if we only need the embeddings, fetch them
+        if return_only_embeddings:
+            pass_encs = list(map(lambda x: x.hidden, pass_encs))
+            rev_encs = list(map(lambda x: x.hidden, rev_encs))
+
         return torch.cat(pass_encs), torch.cat(rev_encs)
 
     @torch.no_grad()
@@ -133,8 +142,8 @@ class CARPMomentum(ContrastiveModel):
 
     def train_step(
         self,
-        passages: List[TensorType["batch", "N_pass"]],
-        reviews: List[TensorType["batch", "N_rev"]],
+        passages: BatchElement,
+        reviews: BatchElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
         scaler: torch.cuda.amp.GradScaler,
@@ -143,10 +152,10 @@ class CARPMomentum(ContrastiveModel):
             passages[0].shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        pass_mbs: List[Tuple[BatchElement]] = [
             (passages[0][i], passages[1][i]) for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[mbTokens, mbTokens]] = [
+        rev_mbs: List[Tuple[BatchElement]] = [
             (reviews[0][i], reviews[1][i]) for i in microbatch_inds
         ]
         # Initially get all encodings without grad
