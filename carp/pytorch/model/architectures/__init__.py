@@ -67,7 +67,8 @@ class BaseModel(nn.Module):
         n = x.shape[0]
         x = F.normalize(x)
         y = F.normalize(y)
-        logits = x @ y.T * self.logit_scale.exp()
+        # small term added to avoid nans in low precision softmax
+        logits = (x @ y.T + 1e-6) * self.logit_scale.exp()
         labels = torch.arange(n, device=self.device)
         loss_i = F.cross_entropy(logits, labels)
         loss_t = F.cross_entropy(logits.T, labels)
