@@ -86,6 +86,23 @@ class BaseEncoder(nn.Module):
             padding=True,
         )
 
+    def forward(self, x, mask, inputs_embeds=False, labels=None):
+        if not inputs_embeds:
+            return self.model(
+                input_ids=x,
+                attention_mask=mask,
+                output_hidden_states=True,
+                return_dict=True,
+                labels=labels
+            )
+        else: 
+            return self.model(
+                inputs_embeds=x,
+                attention_mask=mask,
+                output_hidden_states=True,
+                return_dict=True,
+                labels=labels
+            )
     # Given masks returns indices of last tokens
     def last_ones(self, t):
         # Multipliying arange by max

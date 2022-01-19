@@ -52,19 +52,10 @@ class MLMEncoder(BaseEncoder):
 
     def forward(self, input_ids, mask = None, mlm_input_ids = None, labels = None):
         if not labels is None:
-            model_output = self.model(
-                    input_ids = mlm_input_ids, 
-                    attention_mask = mask,
-                    labels = labels,
-                    output_hidden_states = True
-            )
+            model_output = self.super()(mlm_input_ids, mask, False, labels)
             loss =  model_output['loss']
         else:
-            model_output = self.model(
-                    input_ids = input_ids, 
-                    attention_mask = mask,
-                    output_hidden_states = True
-            )
+            model_output = self.super()(input_ids, mask, False, labels)
             loss = None
 
         hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(model_output)
@@ -73,7 +64,7 @@ class MLMEncoder(BaseEncoder):
 
 # Same as summed text but alternates as being an MLM
 @register_encoder
-class MLMSumEncoder(MLMEncoder):
+class MLMSumTextEncoder(MLMEncoder):
 
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
