@@ -48,17 +48,17 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
 
 
 def get_datasets(config, data_path, random_seed=None):
-    carp = get_datapipeline(config.data_pipeline)(config.dupe_protection, data_path)
-    size = len(carp)
+    dataset = get_datapipeline(config.data_pipeline)(config.dupe_protection, data_path)
+    size = len(dataset)
 
     seed = torch.manual_seed(random_seed)
     if config.eval_selection == 'random':
         splits = [size - config.validation_size, config.validation_size]
-        return random_split(carp, splits, generator=seed)
+        return random_split(dataset, splits, generator=seed)
     elif config.eval_selection == 'final_n':
         train_indices = list(range(size - config.validation_size))
         eval_indices = list(range(size - config.validation_size, size))
-        return Subset(carp, train_indices), Subset(carp, eval_indices)
+        return Subset(dataset, train_indices), Subset(dataset, eval_indices)
     else:
         raise NotImplementedError('The only valid options for `eval_selection` are "random" and "final_n"')
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from carp.configs import CARPConfig, ModelConfig, TrainConfig
 from carp.pytorch.data.scarecrow_pipeline import BatchElement, ScarecrowTargetElement
 from carp.pytorch.model.architectures import * 
-from carp.pytorch.model.encoders import BaseEncoder, get_encoder
+from carp.pytorch.model.encoders import BaseEncoder, BaseEncoderOutput, get_encoder
 from carp.util import generate_indices
 from typing import List
 
@@ -133,29 +133,81 @@ class CARPCoOP(BaseModel):
                 BatchElement
             ]
         ],
-        reviews: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
         return_only_embeddings : bool = True,
     ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = self.encode_reviews()
-        
+
         # if we only need the embeddings, fetch them
         if return_only_embeddings:
             pass_encs = list(map(lambda x: x.hidden, pass_encs))
-            rev_encs = list(map(lambda x: x.hidden, rev_encs))
+            rev_encs = rev_encs.hidden
+
         return pass_encs, rev_encs
 
     def encode_reviews(self):
         y_coop, mask_coop = self.review_encoder_coop()
         y_coop = self.review_encoder(y_coop, mask_coop, inputs_embeds=True)
-        return self.rev_projector(y_coop)
+        return BaseEncoderOutput(self.rev_projector(y_coop.hidden))
 
+    def compute_accuracy(self,
+        x: TensorType["pass_N", "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        labels: TensorType["pass_N", -1]):
+        """Computes KL divergence against target CoOP distribution
+
+            Args:
+                x: Tensor of passage encodings
+                y: Tensor of review encodings, with concat soft prompt embeddings
+                labels: Target distribution
+            Returns:
+                loss: Float (without gradient)
+        """
+        with torch.no_grad():
+            x = F.normalize(x)
+            y = F.normalize(y)
+            logits = F.log_softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
+            loss = F.kl_div(logits.float(), labels.float(), reduction='batchmean')
+        return loss
+
+    def coop_loss(self, 
+        x: TensorType["pass_N", "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        labels: TensorType["pass_N", -1]):
+        """Computes KL divergence against target CoOP distribution
+
+            Args:
+                x: Tensor of passage encodings
+                y: Tensor of review encodings, with concat soft prompt embeddings
+                labels: Target distribution
+            Returns:
+                loss: Float (with gradient)
+        """
+        x = F.normalize(x)
+        y = F.normalize(y)
+        logits = F.log_softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
+        return F.kl_div(logits.float(), labels.float(), reduction='batchmean')
+    
+    def eval_step(self, dataset):
+        passages = []
+        reviews = []
+        for p, r in dataset:
+            passages.append(p)
+            reviews.append(r)
+        
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        print(len(passages))
+        rev_labels = torch.cat(list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0)
+        print(rev_labels.shape)
+        with torch.no_grad():
+            pass_emb, rev_emb = self.calculate_embeddings(passages)
+            val_loss = self.coop_loss(torch.cat(pass_emb), rev_emb, rev_labels)
+            val_acc = self.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
+
+        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
     def train_step(
         self,
         passages: BatchElement,
@@ -171,38 +223,29 @@ class CARPCoOP(BaseModel):
         pass_mbs: List[BatchElement] = [
             BatchElement(passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
         ]
-        rev_mbs: List[ScarecrowTargetElement] = [
-            ScarecrowTargetElement(reviews.target_dist[i]) for i in microbatch_inds
+        # create array of rev_labels and cast to GPU
+        rev_labels: List[torch.tensor] = [
+            reviews.target_dist[i].cuda() for i in microbatch_inds
         ]
 
         # Initially get all encodings without grad
-        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
+        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs)
 
-        #compute accuracy
-        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
+        #compute accuracy. We need labels for CoOP accuracy
+        forward_acc = self.compute_accuracy(torch.cat(pass_encs), rev_encs, torch.cat(rev_labels))
 
         # does gradient accumulation
         self.zero_grad(opt)
 
-        # Encode passages in microbatches (with grad)
+        # Encode passages in microbatches (with grad) and compute coop loss
         for index, passage in enumerate(pass_mbs):
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
                 pass_tmp[index] = self.encode_passages(passage).hidden
-                loss  = self.contrastive_loss(
-                    torch.cat(pass_tmp), torch.cat(rev_encs)
-                )
+                loss  = self.coop_loss(
+                    torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels))
             scaler.scale(loss).backward()
-        # Encode reviews in microbatches (with grad)
-        for index, review in enumerate(rev_mbs):
-            rev_tmp = rev_encs.copy()  # no_grad
-            with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.encode_reviews(review).hidden  
-                # grad _just_ at positions in `index`
-                loss = self.contrastive_loss(
-                    torch.cat(pass_encs), torch.cat(rev_tmp)
-                )
-            scaler.scale(loss).backward()
+
         # Clipping
         if self.config.grad_clip != -1:
             scaler.unscale_(opt)

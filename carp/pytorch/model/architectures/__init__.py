@@ -155,6 +155,7 @@ class BaseModel(nn.Module):
         opt : torch.optim.Optimizer):
         if self.accum_step % self.config.grad_accum == 0:
             opt.zero_grad()
+            
     def step(self,
         scaler : torch.cuda.amp.GradScaler,
         opt: torch.optim.Optimizer):

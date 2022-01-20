@@ -24,7 +24,7 @@ train_job:
   validate_interval: 50
   use_half: false
   do_log: true
-  validation_size: 1000
+  validation_size: 150
   eval_selection: "final_n"
   use_bucket: false
   dupe_protection: true
