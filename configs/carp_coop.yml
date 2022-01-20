@@ -29,6 +29,6 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "BaseDataPipeline"
+  data_pipeline: "ScarecrowDataPipeline"
   orchestrator: "BaseOrchestrator"
   

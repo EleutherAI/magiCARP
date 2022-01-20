@@ -7,13 +7,14 @@ import torch
 from torchtyping import TensorType
 from collections import OrderedDict
 import ast
+from typing import List
 
 import pandas as pd
 import numpy as np
 from numpy.random import choice
 
-def construct_count_label(label_names_tok):
-    def count_label(str_rep):
+def construct_count_label(label_names_tok : List[str]):
+    def count_label(str_rep : str):
         label_counts = OrderedDict([(key,0) for key in label_names_tok])
         l = ast.literal_eval(str_rep)
         for annotator in l:
@@ -25,8 +26,10 @@ def construct_count_label(label_names_tok):
                     label_counts[ann] += 1
         return label_counts
     return count_label
-def construct_parse_label(label_names_tok):
-    def parse_label(str_rep):
+
+def construct_parse_label(label_names_tok : List[str]):
+    def parse_label(str_rep : str):
+        #print(type(str_rep))
         labels = []
         l = ast.literal_eval(str_rep)
         for annotator in l:
@@ -39,13 +42,13 @@ def construct_parse_label(label_names_tok):
         return max(set(labels), key=labels.count)
     return parse_label
 
-
+# number of passages x size of distribution of labels 
 @dataclass
-class CoOPTargetElement:
-    label : TensorType["pass_N"]
+class ScarecrowTargetElement:
+    target_dist : TensorType["pass_N", -1]
 
 @register_datapipeline
-class CoOPDataPipeline(BaseDataPipeline):
+class ScarecrowDataPipeline(BaseDataPipeline):
     
     """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
     def __init__(
@@ -71,10 +74,11 @@ class CoOPDataPipeline(BaseDataPipeline):
         while len(scarecrow_pd['responses'][:1200].value_counts()) < len(label_names) or len(scarecrow_pd['responses'][1200:].value_counts()) < len(label_names):
             scarecrow_pd = scarecrow_pd.sample(frac=1)
 
-        scarecrow_dataset = list(zip(list(scarecrow_pd['generation']), list(scarecrow_pd['responses']), list(scarecrow_pd['counts_distributions'])))
-        scarecrow_alt_labels = list(zip(list(scarecrow_pd['counts_distributions']), list(scarecrow_pd['sampled_responses'])))
-
-        print(scarecrow_dataset[0])
+        # get the passages we want to tune on
+        self.passages = list(scarecrow_pd['generation'])
+        # get the target distributions
+        self.reviews = list(scarecrow_pd['counts_distributions'])
+       
         # we do not initialize the super since scarecrow has a very different dataset format than the original data
         #super().__init__(dupe_protection, path)
 
@@ -93,18 +97,21 @@ class CoOPDataPipeline(BaseDataPipeline):
         @typechecked
         def collate(
             data: Iterable[Tuple[str, str]]
-        ) -> Tuple[BatchElement, CoOPTargetElement]:
+        ) -> Tuple[BatchElement, ScarecrowTargetElement]:
             passages, reviews = zip(*data)
             pass_tokens = _tok(list(passages))
             pass_masks = pass_tokens["attention_mask"]
             pass_tokens = pass_tokens["input_ids"]
 
-            reviews = torch.tensor(list(map(int, list(reviews))))
+            # concat all the target distributions
+            reviews = torch.cat(list(map(\
+                lambda x: torch.tensor(x).unsqueeze(0),\
+                    list(reviews))), dim=0)
 
-
+                
             return (
                 BatchElement(pass_tokens, pass_masks),
-                CoOPTargetElement(reviews)
+                ScarecrowTargetElement(reviews)
             )
 
         return collate

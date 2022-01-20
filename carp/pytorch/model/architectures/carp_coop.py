@@ -5,11 +5,16 @@ from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 from dataclasses import dataclass
 from carp.configs import CARPConfig, ModelConfig, TrainConfig
-from carp.pytorch.data.mlm_pipeline import BatchElement
+from carp.pytorch.data.scarecrow_pipeline import BatchElement, ScarecrowTargetElement
 from carp.pytorch.model.architectures import * 
 from carp.pytorch.model.encoders import BaseEncoder, get_encoder
 from carp.util import generate_indices
 from typing import List
+
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
+
 
 # Written by MicPie
 class PromptLayer(nn.Module):
@@ -18,7 +23,7 @@ class PromptLayer(nn.Module):
         ['Off-prompt', 'Grammar Usage',
         'Needs Google', 'Incoherent', 
         'Technical Jargon', 'Redundant'], 
-        n_ctx : int = 10, ctx_dim : int = 1024):
+        n_ctx : int = 10, ctx_dim : int = 512):
 
         super().__init__()
 
@@ -120,6 +125,31 @@ class CARPCoOP(BaseModel):
         for params in self.rev_projector.parameters():
             params.requires_grad_(False)
 
+    # uses a constant set of reviews for CoOP
+    def calculate_embeddings(
+        self,
+        passages: Iterable[
+            Tuple[
+                BatchElement
+            ]
+        ],
+        reviews: Iterable[
+            Tuple[
+                BatchElement
+            ]
+        ],
+        return_only_embeddings : bool = True,
+    ):
+        # Get encodings without grad
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            pass_encs = [self.encode_passages(p) for p in passages]
+            rev_encs = self.encode_reviews()
+        
+        # if we only need the embeddings, fetch them
+        if return_only_embeddings:
+            pass_encs = list(map(lambda x: x.hidden, pass_encs))
+            rev_encs = list(map(lambda x: x.hidden, rev_encs))
+        return pass_encs, rev_encs
 
     def encode_reviews(self):
         y_coop, mask_coop = self.review_encoder_coop()
@@ -129,7 +159,7 @@ class CARPCoOP(BaseModel):
     def train_step(
         self,
         passages: BatchElement,
-        reviews: BatchElement,
+        reviews: ScarecrowTargetElement,
         config: TrainConfig,
         opt: torch.optim.Optimizer,
         scaler: torch.cuda.amp.GradScaler,
@@ -141,8 +171,8 @@ class CARPCoOP(BaseModel):
         pass_mbs: List[BatchElement] = [
             BatchElement(passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
         ]
-        rev_mbs: List[BatchElement] = [
-            BatchElement(reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
+        rev_mbs: List[ScarecrowTargetElement] = [
+            ScarecrowTargetElement(reviews.target_dist[i]) for i in microbatch_inds
         ]
 
         # Initially get all encodings without grad
