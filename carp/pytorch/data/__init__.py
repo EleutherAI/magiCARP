@@ -113,7 +113,7 @@ class BaseDataPipeline(Dataset):
         return collate
     
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
-
+from carp.pytorch.data.coop_pipeline import CoOPDataPipeline
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]
 

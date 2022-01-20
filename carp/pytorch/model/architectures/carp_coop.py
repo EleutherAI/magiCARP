@@ -14,7 +14,11 @@ from typing import List
 # Written by MicPie
 class PromptLayer(nn.Module):
     def __init__(self, encoder : BaseEncoder,
-        labels : List[str] = ['+', "-"], n_ctx : int = 10, ctx_dim : int = 1024):
+        labels : List[str] = 
+        ['Off-prompt', 'Grammar Usage',
+        'Needs Google', 'Incoherent', 
+        'Technical Jargon', 'Redundant'], 
+        n_ctx : int = 10, ctx_dim : int = 1024):
 
         super().__init__()
 
@@ -31,26 +35,26 @@ class PromptLayer(nn.Module):
 
         toks = [encoder.call_tokenizer(l) for l in labels]
         with torch.no_grad(): # not needed?
-          toks_embs_masks = [{
-              'input_ids': t['input_ids'],
-              'input_embs': encoder.model.embeddings(t['input_ids']),
-              'attention_mask': t['attention_mask']}
-              for t in toks]
+            toks_embs_masks = [{
+                'input_ids': t['input_ids'],
+                'input_embs': encoder.model.embeddings(t['input_ids']),
+                'attention_mask': t['attention_mask']}
+            for t in toks]
         del toks
 
         seq_len_max = np.max([e['input_embs'].shape[1] for e in toks_embs_masks])
 
         self.toks = torch.zeros(self.n_labels, seq_len_max, dtype=torch.int)
-        embs      = torch.zeros(self.n_labels, seq_len_max, ctx_dim, dtype=torch.float)
-        masks     = torch.zeros(self.n_labels, seq_len_max, dtype=torch.bool)
+        embs = torch.zeros(self.n_labels, seq_len_max, ctx_dim, dtype=torch.float)
+        masks = torch.zeros(self.n_labels, seq_len_max, dtype=torch.bool)
 
         for i, e in enumerate(toks_embs_masks):
-          self.toks[i,:e['input_ids'].shape[1]]  = e['input_ids']
-          embs[i,:e['input_embs'].shape[1]]      = e['input_embs'].squeeze(0)
-          masks[i,:e['attention_mask'].shape[1]] = e['attention_mask']
+            self.toks[i,:e['input_ids'].shape[1]] = e['input_ids']
+            embs[i,:e['input_embs'].shape[1]] = e['input_embs'].squeeze(0)
+            masks[i,:e['attention_mask'].shape[1]] = e['attention_mask']
 
-        self.prefix_embs  =  embs[:, :1, :].cuda() # sos
-        self.suffix_embs  =  embs[:, 1:, :].cuda() # cls, eos
+        self.prefix_embs = embs[:, :1, :].cuda() # sos
+        self.suffix_embs = embs[:, 1:, :].cuda() # cls, eos
         self.prefix_masks = masks[:, :1].cuda() # sos
         self.suffix_masks = masks[:, 1:].cuda() # cls, eos
 
