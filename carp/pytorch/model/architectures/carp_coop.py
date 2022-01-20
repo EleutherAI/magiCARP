@@ -244,6 +244,7 @@ class CARPCoOP(BaseModel):
                 pass_tmp[index] = self.encode_passages(passage).hidden
                 loss  = self.coop_loss(
                     torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels))
+                    
             scaler.scale(loss).backward()
 
         # Clipping
