@@ -168,9 +168,10 @@ class CARPCoOP(BaseModel):
         with torch.no_grad():
             x = F.normalize(x)
             y = F.normalize(y)
-            logits = F.log_softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
-            loss = F.kl_div(logits.float(), labels.float(), reduction='batchmean')
-        return loss
+            logits = F.softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
+            labels = labels.argmax(1)
+            acc = (torch.argmax(logits, dim = 1) == labels).sum()
+        return acc/x.shape[0]
 
     def coop_loss(self, 
         x: TensorType["pass_N", "latent_dim"],
@@ -199,9 +200,8 @@ class CARPCoOP(BaseModel):
         
         # TODO: Ideally should get microbatch size from trainconfig for the second argument
         passages = chunkBatchElement(passages[0], 8)
-        print(len(passages))
         rev_labels = torch.cat(list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0)
-        print(rev_labels.shape)
+
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages)
             val_loss = self.coop_loss(torch.cat(pass_emb), rev_emb, rev_labels)
