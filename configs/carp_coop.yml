@@ -2,7 +2,7 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "haisongzhang/roberta-tiny-cased"
+  model_path: "roberta-large"
   model_arch: "roberta"
   encoder_type: "SumTextEncoder"
   grad_clip: -1.0
@@ -13,8 +13,8 @@ model:
 train_job:
   n_ctx: 512
   epochs: 50
-  batch_size: 64
-  microbatch_size: 64
+  batch_size: 32
+  microbatch_size: 32
   lr_ramp_steps: 50
   lr_decay_steps: 3366
   learning_rate_init: 5.0e-5
@@ -24,7 +24,7 @@ train_job:
   validate_interval: 50
   use_half: false
   do_log: true
-  validation_size: 50
+  validation_size: 32
   eval_selection: "final_n"
   use_bucket: false
   dupe_protection: true

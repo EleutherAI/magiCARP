@@ -18,7 +18,7 @@ from pathlib import Path
 def get_arguments():
     parser = ArgumentParser()
     parser.add_argument("--data_path", type=str, required=False)
-    parser.add_argument("--ckpt_path", type=str, required=False)
+    parser.add_argument("--ckpt_path", type=str, default = "./output/", required=False)
     parser.add_argument("--config_path", type=str, default="./base_config.yml")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--load_checkpoint", action='store_true')
@@ -37,10 +37,7 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
 
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
-        if ckpt_path is None:
-            model.load("./output/")
-        else:
-            model.load(ckpt_path)
+        model.load(ckpt_path)
         print("Checkpoint loaded!")
     model.cuda()
     if config.train_job.use_half:
