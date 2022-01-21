@@ -63,6 +63,9 @@ class PromptLayer(nn.Module):
         self.prefix_masks = masks[:, :1].cuda() # sos
         self.suffix_masks = masks[:, 1:].cuda() # cls, eos
 
+        self.prefix_embs.requires_grad = True
+        self.suffix_embs.requires_grad = True
+
     def forward(self):
         ctx = self.ctx
         if ctx.dim() == 2: # With the current setup this is always needed! TO DO: Check!
@@ -148,6 +151,8 @@ class CARPCoOP(BaseModel):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
+
+        with torch.cuda.amp.autocast():
             rev_encs = self.encode_reviews()
 
         # if we only need the embeddings, fetch them
