@@ -20,7 +20,7 @@ train_job:
   learning_rate_init: 1.0e-5
   learning_rate_target: 3.0e-6
   log_interval: 2
-  checkpoint_interval: 500
+  checkpoint_interval: 50
   validate_interval: 50
   use_half: false
   do_log: false
