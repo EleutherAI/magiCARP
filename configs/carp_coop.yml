@@ -12,10 +12,10 @@ model:
 
 train_job:
   n_ctx: 512
-  epochs: 1000
+  epochs: 50
   batch_size: 64
   microbatch_size: 64
-  lr_ramp_steps: 5
+  lr_ramp_steps: 50
   lr_decay_steps: 3366
   learning_rate_init: 5.0e-5
   learning_rate_target: 0.000006

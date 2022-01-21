@@ -86,14 +86,14 @@ class PromptLayer(nn.Module):
         return prompts, masks
 
 
-# CARP CoOP uses prompt tuning as a method to boost biencoder contrastive learning models.
+# CARP CoOp uses prompt tuning as a method to boost biencoder contrastive learning models.
 #  Useful for downstream tasks
 # TODO: Custom training routine. Might need to abstract training significantly
 patch_typeguard()
 
 @typechecked
 @register_architecture
-class CARPCoOP(BaseModel):
+class CARPCoOp(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
         self.config = config
@@ -104,7 +104,7 @@ class CARPCoOP(BaseModel):
         self.review_encoder = encoder_class(
             config.model_path, config.model_arch
         )
-        self.review_encoder_coop = PromptLayer(self.review_encoder)
+        self.review_encoder_CoOp = PromptLayer(self.review_encoder)
 
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
@@ -115,7 +115,7 @@ class CARPCoOP(BaseModel):
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
-        # required for CoOP
+        # required for CoOp
         self.freeze_encoders()
     # freezes encoder and projection layer
     def freeze_encoders(self):
@@ -129,16 +129,16 @@ class CARPCoOP(BaseModel):
             params.requires_grad_(False)
 
     def save(self, path : str):
-        torch.save(self.review_encoder_coop, path + "review_encoder_coop.pt")
+        torch.save(self.review_encoder_CoOp, path + "review_encoder_CoOp.pt")
         super().save(path)
 
     def load(self, path : str):
         try:
-            self.review_encoder_coop = torch.load(path + "review_encoder_coop.pt")
+            self.review_encoder_CoOp = torch.load(path + "review_encoder_CoOp.pt")
         except:
-            print("Unable to load review_encoder_coop. Randomly initializing and continuing.")
+            print("Unable to load review_encoder_CoOp. Randomly initializing and continuing.")
 
-    # uses a constant set of reviews for CoOP
+    # uses a constant set of reviews for CoOp
     def calculate_embeddings(
         self,
         passages: Iterable[
@@ -163,15 +163,15 @@ class CARPCoOP(BaseModel):
         return pass_encs, rev_encs
 
     def encode_reviews(self):
-        y_coop, mask_coop = self.review_encoder_coop()
-        y_coop = self.review_encoder(y_coop, mask_coop, inputs_embeds=True)
-        return BaseEncoderOutput(self.rev_projector(y_coop.hidden))
+        y_CoOp, mask_CoOp = self.review_encoder_CoOp()
+        y_CoOp = self.review_encoder(y_CoOp, mask_CoOp, inputs_embeds=True)
+        return BaseEncoderOutput(self.rev_projector(y_CoOp.hidden))
 
     def compute_accuracy(self,
         x: TensorType["pass_N", "latent_dim"],
         y: TensorType[-1, "latent_dim"],
         labels: TensorType["pass_N", -1]):
-        """Computes KL divergence against target CoOP distribution
+        """Computes KL divergence against target CoOp distribution
 
             Args:
                 x: Tensor of passage encodings
@@ -188,11 +188,11 @@ class CARPCoOP(BaseModel):
             acc = (torch.argmax(logits, dim = 1) == labels).sum()
         return acc/x.shape[0]
 
-    def coop_loss(self, 
+    def CoOp_loss(self, 
         x: TensorType["pass_N", "latent_dim"],
         y: TensorType[-1, "latent_dim"],
         labels: TensorType["pass_N", -1]):
-        """Computes KL divergence against target CoOP distribution
+        """Computes KL divergence against target CoOp distribution
 
             Args:
                 x: Tensor of passage encodings
@@ -219,7 +219,7 @@ class CARPCoOP(BaseModel):
 
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages)
-            val_loss = self.coop_loss(torch.cat(pass_emb), rev_emb, rev_labels)
+            val_loss = self.CoOp_loss(torch.cat(pass_emb), rev_emb, rev_labels)
             val_acc = self.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
@@ -246,18 +246,18 @@ class CARPCoOP(BaseModel):
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs)
 
-        #compute accuracy. We need labels for CoOP accuracy
+        #compute accuracy. We need labels for CoOp accuracy
         forward_acc = self.compute_accuracy(torch.cat(pass_encs), rev_encs, torch.cat(rev_labels))
 
         # does gradient accumulation
         self.zero_grad(opt)
 
-        # Encode passages in microbatches (with grad) and compute coop loss
+        # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(pass_mbs):
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
                 pass_tmp[index] = self.encode_passages(passage).hidden
-                loss  = self.coop_loss(
+                loss  = self.CoOp_loss(
                     torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels))
                     
             scaler.scale(loss).backward()

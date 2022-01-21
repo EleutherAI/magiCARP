@@ -248,7 +248,7 @@ from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
-from carp.pytorch.model.architectures.carp_coop import CARPCoOP
+from carp.pytorch.model.architectures.carp_coop import CARPCoOp
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]

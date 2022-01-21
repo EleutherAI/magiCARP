@@ -10,4 +10,4 @@ CARP presents a scalable method for performing zero-shot evaluation of stories a
 To train a model, run 
 ```poetry run python -m carp.pytorch.train --data_path="carp/dataset" --config_path ./base_config.yml```
 
-Finetuning via COOP and preference learning coming soon.
+Finetuning via CoOp now available. Preference learning coming soon!
