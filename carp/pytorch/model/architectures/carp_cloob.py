@@ -47,19 +47,6 @@ patch_typeguard()
 class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__()
-        self.config = config
-        encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.review_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.latent_dim = self.config.latent_dim
-        self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
-
-        self.logit_scale = torch.ones([], device=self.config.device) *\
-            torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
         
         self.hopfield_scale = torch.ones([], device=self.config.device) *\
             torch.log(torch.tensor([8], device=self.config.device, requires_grad=False))

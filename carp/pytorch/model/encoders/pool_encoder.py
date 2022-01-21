@@ -16,17 +16,14 @@ class SumTextEncoder(BaseEncoder):
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
-    def forward(self, x, mask=None, tokenize: bool = False, mask_sum: bool = True) -> TensorType['batch', 'embed_dim']:
+    def forward(self, x, mask=None, tokenize: bool = False,
+        mask_sum: bool = True, inputs_embeds : bool = False) -> TensorType['batch', 'embed_dim']:
         if tokenize:
             x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
-        out = self.model(
-            input_ids=x,
-            attention_mask=mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
+
         hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(out)
         # Mask out pad tokens embeddings
         if mask_sum:
@@ -54,13 +51,9 @@ class EOTTextEncoder(BaseEncoder):
         """
         return [s + "<|endoftext|>" for s in string_batch]
 
-    def forward(self, x, mask=None):
-        out = self.model(
-            input_ids=x,
-            attention_mask=mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
+    def forward(self, x, mask=None, inputs_embeds=False):
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
+
         hidden = self.extract_fn(out)
         eot_inds = self.last_ones(mask)
         return BaseEncoderOutput(hidden[torch.arange(hidden.size(0)), eot_inds])
@@ -91,13 +84,8 @@ class MultiCLSEncoder(BaseEncoder):
         """
         return [self.add_cls(s) for s in string_batch]
 
-    def forward(self, x, mask=None):
-        out = self.model(
-            input_ids=x,
-            attention_mask=mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
+    def forward(self, x, mask=None, inputs_embeds=False) -> TensorType['batch', 'embed_dim']:
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
         hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(out)
         batch_size = hidden.size(0)
         # start_inds are just 0-th position
@@ -141,6 +129,6 @@ class MeanPoolEncoder(BaseEncoder):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     
-    def forward(self, x, mask):
-        out = self.model(x, mask)
+    def forward(self, x, mask = None, inputs_embeds = False) -> TensorType['batch', 'embed_dim']:
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
         return BaseEncoderOutput(self.mean_pooling(out, mask))

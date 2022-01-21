@@ -86,6 +86,20 @@ class BaseEncoder(nn.Module):
             padding=True,
         )
 
+    def forward(self, inputs_embeds=False, **kwargs):
+        assert 'x' in kwargs.keys(), "Error: Input tensor must be specified."
+
+        if inputs_embeds:
+            kwargs['inputs_embeds'] = kwargs['x']
+        else:
+            kwargs['input_ids'] = kwargs['x']
+        del kwargs['x']
+
+        return self.model(
+            output_hidden_states=True,
+            return_dict=True,
+            **kwargs
+        )
     # Given masks returns indices of last tokens
     def last_ones(self, t):
         # Multipliying arange by max
