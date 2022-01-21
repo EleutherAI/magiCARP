@@ -90,7 +90,7 @@ def train(model,
     # setup data pipeline. model is needed 
     tokenizer = orchestrator.construct_tokenizer(model.passage_encoder)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0,eps = 1e-5)
+    opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0,eps = 1e-4)
     scheduler = LambdaLR(opt, get_scheduling_func(orchestrator.train_config))
     scaler = torch.cuda.amp.GradScaler()
     if LOAD_CHECKPOINT:
