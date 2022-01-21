@@ -69,6 +69,7 @@ class CARP(BaseModel):
         # Clipping
         if self.config.grad_clip != -1:
             scaler.unscale_(opt)
+            for p in self.parameters(): p.grad /= (2048 ** .5)
             torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
 
         self.step(scaler, opt)
