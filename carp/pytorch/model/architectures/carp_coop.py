@@ -23,7 +23,7 @@ class PromptLayer(nn.Module):
         ['Off-prompt', 'Grammar Usage',
         'Needs Google', 'Incoherent', 
         'Technical Jargon', 'Redundant'], 
-        n_ctx : int = 10, ctx_dim : int = 512):
+        n_ctx : int = 10, ctx_dim : int = 1024):
 
         super().__init__()
 
@@ -97,23 +97,7 @@ class CARPCoOp(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
         self.config = config
-        encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.review_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
         self.review_encoder_CoOp = PromptLayer(self.review_encoder)
-
-        self.latent_dim = self.config.latent_dim
-        self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
-        self.logit_scale = nn.Parameter(
-            torch.ones([], device=self.config.device)
-            * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
-        )
-        self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
-        self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
         # required for CoOp
         self.freeze_encoders()
@@ -137,6 +121,7 @@ class CARPCoOp(BaseModel):
             self.review_encoder_CoOp = torch.load(path + "review_encoder_CoOp.pt")
         except:
             print("Unable to load review_encoder_CoOp. Randomly initializing and continuing.")
+        super().load(path)
 
     # uses a constant set of reviews for CoOp
     def calculate_embeddings(
