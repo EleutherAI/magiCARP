@@ -13,7 +13,7 @@ def get_dataset(val_size: int, use_bucket: bool = False, dupe_protection: bool =
             "Function `load_dataset_from_bucket` got lost in the shuffle. Load your data locally for now."
         )
     else:
-        dataset = load_from_disk("dataset_critiques_masked_anon")
+        dataset = load_from_disk("../../../dataset")
     train = dataset["train"]
     passages = train["story_target"]
     reviews = train["target_comment"]
@@ -56,6 +56,10 @@ def write_dataset_csv(data, filepath):
 
 
 if __name__ == "__main__":
-    train_set, val_set = get_dataset()
+    train_set, val_set = get_dataset(100,dupe_protection=False)
     train_set = list(map(lambda x: list(x), train_set))
+    val_set = list(map(lambda x: ["", list(x)[1]], val_set))
+
     write_dataset_csv(train_set, 'train.csv')
+    write_dataset_csv(val_set, 'val_crits.csv')
+

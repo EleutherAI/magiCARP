@@ -103,6 +103,7 @@ def train(model,
     model.train()
     iteration = 0
     timer = Clock()
+    best_val = 100
     for epoch in range(orchestrator.train_config.epochs):
         model, scheduler, opt = orchestrator.on_epoch_start(model, scheduler, opt)
         train_data = orchestrator.construct_dataloader(dataset, tokenizer)
@@ -140,8 +141,15 @@ def train(model,
 
                 eval_out = model.eval_step(eval_data)
                 model, scheduler, opt = orchestrator.after_validate_step(model, scheduler, opt)
-                print(f"Validation Avg Loss: {eval_out['Loss/Validation']}")
-                print(f"Validation Avg Accuracy: {eval_out['Acc/Validation']}")
+                
+
+                if eval_out['Loss/Validation'] < best_val:
+                    best_val = eval_out['Loss/Validation']
+                    print("NEW BEST VALIDATION. SAVING.")
+                    print(f"Validation Avg Loss: {eval_out['Loss/Validation']}")
+                    print(f"Validation Avg Accuracy: {eval_out['Acc/Validation']}")
+                    Path(f"./best/{iteration}/").mkdir(parents=True, exist_ok=True)
+                    model.save(f"./best/{iteration}/")
                 if orchestrator.train_config.do_log:
                     wandb.log(eval_out)
                 model.train()
