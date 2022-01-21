@@ -8,6 +8,6 @@ CARP presents a scalable method for performing zero-shot evaluation of stories a
 
 
 To train a model, run 
-```poetry run python -m carp.pytorch.train --data_path="carp/dataset" --config_path ./base_config.yml```
+```poetry run python -m carp.pytorch.training.train --data_path="carp/dataset" --config_path ./configs/base_config.yml```
 
 Finetuning via CoOp now available. Preference learning coming soon!
