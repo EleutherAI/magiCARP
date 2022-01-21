@@ -12,6 +12,7 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, random_split, RandomSampler, Subset
 import wandb
+from pathlib import Path
 
 
 def get_arguments():
@@ -37,9 +38,9 @@ def get_model(config: CARPConfig, load_checkpoint: bool,\
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
         if ckpt_path is None:
-            model.load_state_dict(torch.load("./params.pt"))
+            model.load("./output/")
         else:
-            model.load_state_dict(torch.load(ckpt_path))
+            model.load(ckpt_path)
         print("Checkpoint loaded!")
     model.cuda()
     if config.train_job.use_half:
@@ -67,13 +68,13 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
     print("SAVING...")
     # Only save extra once every 20
     if save_iter:
-        torch.save(
-            model.state_dict(),
-            f"./checkpoints/{iter}params.pt",
-        )
-    torch.save(model.state_dict(), "./params.pt")
-    torch.save(scheduler.state_dict(), "./schedule.pt")
-    torch.save(opt.state_dict(), "./opt.pt")
+        Path(f"./checkpoints/{iter}/").mkdir(parents=True, exist_ok=True)
+        model.save(f"./checkpoints/{iter}/")
+        
+    Path("./output/").mkdir(parents=True, exist_ok=True)
+    model.save("./output/")
+    torch.save(scheduler.state_dict(), "./output/schedule.pt")
+    torch.save(opt.state_dict(), "./output/opt.pt")
 
 
 # Dataset assumed to be list of pairs on memory
@@ -93,8 +94,15 @@ def train(model,
     scheduler = LambdaLR(opt, get_scheduling_func(orchestrator.train_config))
     scaler = torch.cuda.amp.GradScaler()
     if LOAD_CHECKPOINT:
-        scheduler.load_state_dict(torch.load("./schedule.pt"))
-        opt.load_state_dict(torch.load("./opt.pt"))
+        try:
+            if args.ckpt_path is None:
+                scheduler.load_state_dict(torch.load("./output/schedule.pt"))
+                opt.load_state_dict(torch.load("./output/opt.pt"))
+            else:
+                scheduler.load_state_dict(torch.load(args.ckpt_path+"schedule.pt"))
+                opt.load_state_dict(torch.load(args.ckpt_path+"opt.pt"))
+        except:
+            print("Unable to load scheduler and/or optimizer. Continuing.")
     model.train()
     iteration = 0
     timer = Clock()

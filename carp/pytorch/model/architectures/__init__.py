@@ -11,6 +11,7 @@ from torch import nn
 
 from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
 from carp.configs import TrainConfig
+from carp.pytorch.model.encoders import get_encoder
 
 # specifies a dictionary of architectures
 _ARCHITECTURES: Dict[str, any] = {}  # registry
@@ -44,12 +45,49 @@ patch_typeguard()
 class BaseModel(nn.Module):
     """Abstract class that defines the basic API used for the different contrastive models."""
 
-    def __init__(self, config):
+    def __init__(self, config, skip_init=False):
+        super().__init__()
+        if not skip_init:
+            self.config = config
+            encoder_class = get_encoder(config.encoder_type)
+            self.passage_encoder = encoder_class(
+                config.model_path, config.model_arch
+            )
+            self.review_encoder = encoder_class(
+                config.model_path, config.model_arch
+            )
+            self.latent_dim = self.config.latent_dim
+            self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
+            self.logit_scale = nn.Parameter(
+                torch.ones([], device=self.config.device)
+                * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
+            )
+            self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
+            self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
         # used to count the number of steps until the next accumulation 
         self.accum_step = 0
         self.config = config
-        super().__init__()
-        
+
+    # saves the model to the output directory. saved in chunks so that config can be swapped later
+    def save(self, path : str):
+        torch.save(self.passage_encoder.model, path + "passage_encoder.pt")
+        torch.save(self.review_encoder.model, path + "review_encoder.pt")
+
+        torch.save(self.pass_projector, path + "pass_projector.pt")
+        torch.save(self.rev_projector, path + "rev_projector.pt")
+
+        torch.save(self.logit_scale, path + "logit_scale.pt")
+
+    # must be run after initialize 
+    def load(self, path : str):
+        self.passage_encoder.model = torch.load(path + "passage_encoder.pt")
+        self.review_encoder.model = torch.load(path + "review_encoder.pt")
+
+        self.pass_projector = torch.load(path + "pass_projector.pt")
+        self.rev_projector = torch.load(path + "rev_projector.pt")
+
+        self.logit_scale = torch.load(path + "logit_scale.pt")
+
     def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
         with torch.no_grad():
             n = x.shape[0]

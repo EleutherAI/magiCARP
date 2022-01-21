@@ -17,22 +17,7 @@ patch_typeguard()
 class CARP(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
-        self.config = config
-        encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.review_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.latent_dim = self.config.latent_dim
-        self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
-        self.logit_scale = nn.Parameter(
-            torch.ones([], device=self.config.device)
-            * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
-        )
-        self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
-        self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
+        
 
     def train_step(
         self,

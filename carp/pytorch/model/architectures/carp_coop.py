@@ -125,6 +125,16 @@ class CARPCoOP(BaseModel):
         for params in self.rev_projector.parameters():
             params.requires_grad_(False)
 
+    def save(self, path : str):
+        torch.save(self.review_encoder_coop, path + "review_encoder_coop.pt")
+        super().save(path)
+
+    def load(self, path : str):
+        try:
+            self.review_encoder_coop = torch.load(path + "review_encoder_coop.pt")
+        except:
+            print("Unable to load review_encoder_coop. Randomly initializing and continuing.")
+
     # uses a constant set of reviews for CoOP
     def calculate_embeddings(
         self,
