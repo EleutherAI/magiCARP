@@ -130,7 +130,7 @@ def train(model,
                     wandb.log(batch_outputs, commit=True)
             # Checkpoint model and scheduler
             if iteration % orchestrator.train_config.checkpoint_interval == 0:
-                save_iter = iteration % (20 * orchestrator.train_config.checkpoint_interval) == 0
+                save_iter = iteration % (orchestrator.train_config.checkpoint_interval) == 0
                 model, scheduler, opt = orchestrator.before_save(model, scheduler, opt)
                 save_checkpoint(model, scheduler, opt, iteration, save_iter)
                 model, scheduler, opt = orchestrator.after_save(model, scheduler, opt)
