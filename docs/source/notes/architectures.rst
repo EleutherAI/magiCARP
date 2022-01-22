@@ -1,5 +1,3 @@
-.. _architectures:
-
 CARP Architectures
 =====================
 

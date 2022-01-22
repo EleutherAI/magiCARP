@@ -1,5 +1,3 @@
-.. _config:
-
 Configuring CARP
 ===========================
 Refer to the base_config.yml file location in magicarp/configs as an example config file. Config arguments are divided into two categories:
