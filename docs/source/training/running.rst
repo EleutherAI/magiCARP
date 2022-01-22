@@ -10,4 +10,4 @@ Use the type flag to specify the type of model architecture you wish to use. For
 
     poetry run python -m carp.pytorch.training.train -\-\data_path="carp/dataset" -\-\config_path ./configs/carp_coop.yml -\-\type carpcoop
 
-Refer to `architectures <notes/architectures>`_ for a comprehensive list of the types of architectures that can be used in training.
+Refer to `architectures <../notes/architectures>`_ for a comprehensive list of the types of architectures that can be used in training.

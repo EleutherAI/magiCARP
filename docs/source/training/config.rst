@@ -12,7 +12,7 @@ model config and train config.
 * linear_projection | *boolean* | if true, language model embedding is linearly projected to encoding space, if false, a feed forward network with dropout is used for this projection
 * model_path | *str* | huggingface path to model being used for language embedding
 * model_arch | *str* | the type of model (determines how embedding is extracted) (currently supported: `"roberta" <https://huggingface.co/roberta-base>`_, `"neo" <https://huggingface.co/EleutherAI/gpt-neo-2.7B>`_, `"declutr" <https://huggingface.co/johngiorgi/declutr-base>`_)
-* encoder_type | *str* | the type of encoder used to generate embedding from language model (see `Encoders <notes/encoders>`_)
+* encoder_type | *str* | the type of encoder used to generate embedding from language model (see `Encoders <../notes/encoders>`_)
 * momentum | *float* | 
 * device | *str* | device to run model on 
 * grad_accum | *int* | 
@@ -34,7 +34,7 @@ model config and train config.
 * checkpoint_interval | *int* | how often to save checkpoints of the model
 * validate_interval | *int* | how often to run model on validation set
 * eval_selection | *string* | how the validation set is chosen
-* data_pipeline | *string* | the data pipeline to use for training (see `Preparing The Dataset <training/dataset>`_)
+* data_pipeline | *string* | the data pipeline to use for training (see `Preparing The Dataset <dataset>`_)
 * orchestrator | *string* |
 * dupe_protection | *boolean* | if true, prunes any data points that have less than 8 characters
 * hard_dupe_protection | *boolean* | if true, manually checks all batches for duplicate data points and skips batches containing duplicates
