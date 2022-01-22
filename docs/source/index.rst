@@ -1,15 +1,27 @@
-.. magiCARP API Documentation documentation master file, created by
-   sphinx-quickstart on Sat Jan 22 14:34:14 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+:github_url: https://github.com/eleutherai/magicarp
 
-Welcome to magiCARP API Documentation's documentation!
+magiCARP API Documentation
 ======================================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+magiCARP is an API built to simplify training and running the CARP model, originally presented in 
+`Cut the CARP: Fishing for zero-shot story evaluation <https://arxiv.org/abs/2110.03111>`_.
 
+.. toctree::
+   :glob:
+   :maxdepth: 1
+   :caption: Training
+   
+   training/dataset
+   training/config
+   training/running
+
+.. toctree::
+   :glob:
+   :maxdepth: 1
+   :caption: Notes
+
+   notes/architectures
+   notes/encoders
 
 
 Indices and tables
