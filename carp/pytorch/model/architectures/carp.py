@@ -69,7 +69,7 @@ class CARP(BaseModel):
         # Clipping
         if self.config.grad_clip != -1:
             scaler.unscale_(opt)
-            torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), self.config.grad_clip)
 
         self.step(scaler, opt)
         return {

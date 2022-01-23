@@ -13,8 +13,9 @@ class ModelConfig:
     encoder_type: str  # "sum", "eot", "multicls", "direct" (for declutr)
     momentum: float = 0.0
     device: str = "cuda:0"
-    grad_clip: float = -1 # What to clip grad norms to (set to -1 for no clip)
     grad_accum: int = 1
+    model_eps: float = 1.0e-4 # Epsilon to add to logits in contrastive loss
+    grad_clip: float = -1 # What to clip grad norms to (set to -1 for no clip)
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -47,6 +48,7 @@ class TrainConfig:
     validation_size: int = 1000
     use_half: bool = False
     use_bucket: bool = False
+    opt_eps: float = 1e-4 # Epsilon for optimizer
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
