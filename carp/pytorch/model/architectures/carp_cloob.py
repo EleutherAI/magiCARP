@@ -46,13 +46,21 @@ patch_typeguard()
 @register_architecture
 class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
-        super().__init__()
+        super().__init__(config)
         
         self.hopfield_scale = torch.ones([], device=self.config.device) *\
             torch.log(torch.tensor([8], device=self.config.device, requires_grad=False))
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
+
+    def save(self, path : str):
+        self.attempt_save(self.hopfield_scale, path, "hopfield_scale.pt")
+        super().save(path)
+
+    def load(self, path : str):
+        self.hopfield_scale = self.attempt_load(path, "hopfield_scale.pt")
+        super().load(path)
 
     def clamp(self):
         with torch.no_grad():

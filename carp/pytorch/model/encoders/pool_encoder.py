@@ -99,6 +99,7 @@ class MultiCLSEncoder(BaseEncoder):
 @register_encoder
 class DirectTextEncoder(BaseEncoder):
     def __init__(self, model_path: str, model_arch: str):
+        print(super)
         super().__init__(model_path, model_arch)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
