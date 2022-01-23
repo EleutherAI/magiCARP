@@ -1,4 +1,5 @@
 from __future__ import annotations
+from abc import abstractmethod
 
 import sys
 from typing import Dict, Tuple, Iterable, List
@@ -67,26 +68,57 @@ class BaseModel(nn.Module):
         # used to count the number of steps until the next accumulation 
         self.accum_step = 0
         self.config = config
+    @abstractmethod
+    def attempt_save(cls, component, path : str, component_name : str):
+        """
+        Attempts to save a component of the model. Throws an exception and continues if the component cannot be saved
+        Args:
+            component : Component to be saved using torch.save
+            path : directory to save to
+            component_name : name of component to append onto path
+        """
+        try:
+            torch.save(component, path + component_name)
+        except:
+            print("Unable to save " + component_name + ". Continuing.")
+
+    @abstractmethod
+    def attempt_load(cls, path : str, component_name : str):
+        """
+        Attempts to load a component of the model. Throws an exception and continues if the component cannot be loaded
+        Args:
+            path : directory to load from 
+            component_name : name of component to append onto path
+        Returns:
+            component : nn.module
+        """
+        try: 
+            return torch.load(path + component_name)
+        except:
+            print("Unable to load " + component_name + ". Continuing.")
 
     # saves the model to the output directory. saved in chunks so that config can be swapped later
     def save(self, path : str):
-        torch.save(self.passage_encoder.model, path + "passage_encoder.pt")
-        torch.save(self.review_encoder.model, path + "review_encoder.pt")
+        self.attempt_save(self.passage_encoder.model, path, "passage_encoder.pt")
+        self.attempt_save(self.review_encoder.model, path, "review_encoder.pt")
 
-        torch.save(self.pass_projector, path + "pass_projector.pt")
-        torch.save(self.rev_projector, path + "rev_projector.pt")
+        self.attempt_save(self.pass_projector, path, "pass_projector.pt")
+        self.attempt_save(self.rev_projector, path, "rev_projector.pt")
+        try:
+            self.attempt_save(self.logit_scale, path, "logit_scale.pt")
+        except:
+            pass
 
-        torch.save(self.logit_scale, path + "logit_scale.pt")
 
     # must be run after initialize 
     def load(self, path : str):
-        self.passage_encoder.model = torch.load(path + "passage_encoder.pt")
-        self.review_encoder.model = torch.load(path + "review_encoder.pt")
+        self.passage_encoder.model = self.attempt_load(path, "passage_encoder.pt")
+        self.review_encoder.model = self.attempt_load(path, "review_encoder.pt")
 
-        self.pass_projector = torch.load(path + "pass_projector.pt")
-        self.rev_projector = torch.load(path + "rev_projector.pt")
+        self.pass_projector = self.attempt_load(path, "pass_projector.pt")
+        self.rev_projector = self.attempt_load(path, "rev_projector.pt")
 
-        self.logit_scale = torch.load(path + "logit_scale.pt")
+        self.logit_scale = self.attempt_load(path, "logit_scale.pt")
 
     def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
         with torch.no_grad():
@@ -94,20 +126,35 @@ class BaseModel(nn.Module):
             x = F.normalize(x)
             y = F.normalize(y)
             logits = x @ y.T * self.logit_scale.exp()
-            labels = torch.arange(n, device=self.device)
+            labels = torch.arange(n, device=self.config.device)
             acc_i = (torch.argmax(logits, dim=1) == labels).sum()
             acc_t = (torch.argmax(logits, dim=0) == labels).sum()
         return (acc_i + acc_t) / n / 2
+    def cosine_sim(self,\
+        x: TensorType[-1, "latent_dim"],        
+        y: TensorType[-1, "latent_dim"]):
+        """
+        Computes the cosine similarity between two sets of vectors x,y
+        Args:
+            x: Tensor of passage embeddings
+            y: Tensor of review embeddings
+        Returns:
+            Matrix of size pass_N x rev_N
+        """
+
+        x = F.normalize(x)
+        y = F.normalize(y)
+        # small term added to avoid nans in low precision softmax
+        return (x @ y.T + 1e-6) 
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
     ) -> TensorType[(), float]:
+
         n = x.shape[0]
-        x = F.normalize(x)
-        y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        logits = (x @ y.T + self.config.model_eps) * self.logit_scale.exp()
-        labels = torch.arange(n, device=self.device)
+        logits = self.cosine_sim(x,y) * self.logit_scale.exp()
+        labels = torch.arange(n, device=self.config.device)
         loss_i = F.cross_entropy(logits, labels)
         loss_t = F.cross_entropy(logits.T, labels)
         return (loss_i + loss_t) / 2
@@ -143,7 +190,7 @@ class BaseModel(nn.Module):
         encoder,
         projector,
     ):
-        x = encoder(x.input_ids.to(self.device), x.mask.to(self.device))
+        x = encoder(x.input_ids.to(self.config.device), x.mask.to(self.config.device))
         x.hidden = projector(x.hidden)
         return x
 
