@@ -6,7 +6,7 @@ config = CARPConfig.load_yaml("./configs/carp_cloob.yml")
 # initialize the cloob model
 cloob_model = CARPCloob(config.model)
 # load the pretrained model
-cloob_model.load("/mnt/raid/model_archive/CLOOB CARP Declutr B New/")
+cloob_model.load("CLOOB CARP Declutr B/")
 # cast to GPU
 cloob_model = cloob_model.cuda()
 
