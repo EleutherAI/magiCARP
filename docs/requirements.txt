@@ -1,3 +1,10 @@
 sphinx
 sphinx_rtd_theme
 myst_parser
+mock
+torch
+numpy
+datasets
+transformers
+typeguard
+torchtyping
