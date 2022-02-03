@@ -9,7 +9,9 @@ from carp.pytorch.model.encoders import register_encoder, BaseEncoder, BaseEncod
 
 
 class SharedEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str, model : PreTrainedModel = None, is_review_encoder : bool = False):
+    def __init__(self, model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+
         super().__init__(model_path=model_path, model_arch=model_arch, skip_init=True)
 
         self.is_review_encoder = is_review_encoder
@@ -41,8 +43,10 @@ class SharedEncoder(BaseEncoder):
 
 @register_encoder
 class SharedSumTextEncoder(SharedEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self,model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+
+        super().__init__(model_path, model_arch, model, is_review_encoder)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -64,8 +68,11 @@ class SharedSumTextEncoder(SharedEncoder):
 
 @register_encoder
 class SharedEOTTextEncoder(SharedEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self,model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+
+        super().__init__(model_path, model_arch, model, is_review_encoder)
+
         # Add eot,pad token to model and tokenizer
         self.tokenizer.add_tokens(["<|endoftext|>"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
@@ -93,7 +100,11 @@ class SharedEOTTextEncoder(SharedEncoder):
 # Adds CLS token to start of string, end of string and middle of string
 @register_encoder
 class SharedMultiCLSEncoder(SharedEncoder):
-    def __init__(self, model_path: str, model_arch: str):
+    def __init__(self,model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+
+        super().__init__(model_path, model_arch, model, is_review_encoder)
+
         super().__init__(model_path, model_arch)
         self.tokenizer.add_tokens(["[CLS]"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
@@ -129,8 +140,11 @@ class SharedMultiCLSEncoder(SharedEncoder):
 
 @register_encoder
 class SharedDirectTextEncoder(SharedEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self,model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+
+        super().__init__(model_path, model_arch, model, is_review_encoder)
+
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -149,8 +163,11 @@ class SharedDirectTextEncoder(SharedEncoder):
 @register_encoder
 class SharedMeanPoolEncoder(SharedEncoder):
 
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self,model_path: str, model_arch: str,
+        model : PreTrainedModel = None, is_review_encoder : bool = False):
+        
+        super().__init__(model_path, model_arch, model, is_review_encoder)
+
     
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)

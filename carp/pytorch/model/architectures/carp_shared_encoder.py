@@ -10,11 +10,15 @@ from typing import List
 
 from carp.pytorch.data.utils.data_util import BatchElement
 
+
+# Uses only a single encoder for both the passage encoder and critique encoder. Prepends modality specific tokens
+# per encoder
+
 patch_typeguard()
 
 @typechecked
 @register_architecture
-class CARPSharedEncoders(BaseModel):
+class CARPSharedEncoder(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config, skip_init=True)
         self.config = config
