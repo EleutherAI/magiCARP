@@ -111,6 +111,7 @@ class BaseEncoder(nn.Module):
 
 from carp.pytorch.model.encoders.pool_encoder import *
 from carp.pytorch.model.encoders.mlm_encoder import *
+from carp.pytorch.model.encoders.shared_encoder import *
 
 def get_encoder(name):
     return _ENCODERS[name.lower()]

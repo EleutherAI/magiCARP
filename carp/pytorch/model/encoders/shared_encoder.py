@@ -1,20 +1,51 @@
 from abc import abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Iterable, Tuple, Union
-from torch import nn
-import torch.nn.functional as F
+from typing import Iterable, List
 import torch
+import torch.nn.functional as F
 from torchtyping import TensorType
 
+from transformers import AutoModel, AutoTokenizer, PreTrainedModel
 from carp.pytorch.model.encoders import register_encoder, BaseEncoder, BaseEncoderOutput
 
+
+class SharedEncoder(BaseEncoder):
+    def __init__(self, model_path: str, model_arch: str, model : PreTrainedModel = None, is_review_encoder : bool = False):
+        super().__init__(model_path=model_path, model_arch=model_arch, skip_init=True)
+
+        self.is_review_encoder = is_review_encoder
+        # each component of the shared encoder will have its own tokenizer
+        # since too much of the data pipeline depends on this
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        # add quote token to model and tokenizer
+        self.tokenizer.add_tokens(["[quote]", "[story]", "[critique]"])
+
+
+        # if the model was not already initialized on the other encoder
+        # initialize it here and resize the embeddings
+        if model is None:
+            self.model = AutoModel.from_pretrained(model_path)
+            self.model.resize_token_embeddings(len(self.tokenizer))
+        else:
+            self.model = model
+
+    # adds corresponding prefixes to tell the encoder which modality we are referring to
+    def add_prefix(self, text: str):
+        if self.is_review_encoder:
+            return "[critique]" + text
+        else:
+            return "[story]" + text
+
+    def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
+        return [self.add_prefix(s) for s in string_batch]
+        
+
 @register_encoder
-class SumTextEncoder(BaseEncoder):
+class SharedSumTextEncoder(SharedEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
-        return string_batch
+        return super().preprocess(string_batch)
 
     def forward(self, x, mask=None, tokenize: bool = False,
         mask_sum: bool = True, inputs_embeds : bool = False) -> TensorType['batch', 'embed_dim']:
@@ -32,7 +63,7 @@ class SumTextEncoder(BaseEncoder):
         return BaseEncoderOutput(F.normalize(hidden.sum(1))) # Sum along sequence
 
 @register_encoder
-class EOTTextEncoder(BaseEncoder):
+class SharedEOTTextEncoder(SharedEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
         # Add eot,pad token to model and tokenizer
@@ -47,9 +78,9 @@ class EOTTextEncoder(BaseEncoder):
             string_batch (Iterable[str]): The batch of text that will be encoded.
 
         Returns:
-            Iterable[str]: list of modified strings
+            List[str]: list of modified strings
         """
-        return [s + "<|endoftext|>" for s in string_batch]
+        return super().preprocess([s + "<|endoftext|>" for s in string_batch])
 
     def forward(self, x, mask=None, inputs_embeds=False):
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
@@ -61,7 +92,7 @@ class EOTTextEncoder(BaseEncoder):
 
 # Adds CLS token to start of string, end of string and middle of string
 @register_encoder
-class MultiCLSEncoder(BaseEncoder):
+class SharedMultiCLSEncoder(SharedEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
         self.tokenizer.add_tokens(["[CLS]"])
@@ -80,9 +111,9 @@ class MultiCLSEncoder(BaseEncoder):
             string_batch (Iterable[str]): Batch of strings
 
         Returns:
-            Iterable[str]: list of modified strings
+            List[str]: list of modified strings
         """
-        return [self.add_cls(s) for s in string_batch]
+        return super().preprocess([self.add_cls(s) for s in string_batch])
 
     def forward(self, x, mask=None, inputs_embeds=False) -> TensorType['batch', 'embed_dim']:
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
@@ -97,12 +128,12 @@ class MultiCLSEncoder(BaseEncoder):
         return BaseEncoderOutput(F.normalize(start_embed + mid_embed + end_embed))
 
 @register_encoder
-class DirectTextEncoder(BaseEncoder):
+class SharedDirectTextEncoder(SharedEncoder):
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
-        return string_batch
+        return super().preprocess(string_batch)
 
     def forward(self, x, mask=None, tokenize: bool = False):
         if tokenize:
@@ -116,13 +147,13 @@ class DirectTextEncoder(BaseEncoder):
         return BaseEncoderOutput(embed)
 
 @register_encoder
-class MeanPoolEncoder(BaseEncoder):
+class SharedMeanPoolEncoder(SharedEncoder):
 
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
     
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
-        return string_batch
+        return super().preprocess(string_batch)
 
     def mean_pooling(self, model_output, attention_mask):
         token_embeddings = model_output[0] #First element of model_output contains all token embeddings
