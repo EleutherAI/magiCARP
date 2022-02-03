@@ -1,13 +1,13 @@
 Preparing The Dataset
 =========================
 magiCARP contains multiple data pipelines which can be specified through the 
-config file (see `configuring carp <config>`_).
+config file (see :doc:`configuring carp </training/config>`).
 The base CARP architecture is trained using data structrued in the form of
 tuples containing some passage and a corresponding review.
 
 
 Vanilla CARP 
-============
+############
 .. autoclass:: carp.pytorch.data.utils.data_util.BatchElement
     :members:
 
@@ -15,7 +15,7 @@ Vanilla CARP
     :members:
 
 CARP MLM
-============
+############
 
 .. autoclass:: carp.pytorch.data.mlm_pipeline.MLMBatchElement
     :members:
@@ -24,7 +24,7 @@ CARP MLM
     :members:
 
 CARP COOP 
-===========
+############
 
 .. autoclass:: carp.pytorch.data.scarecrow_pipeline.ScarecrowTargetElement
     :members:
@@ -33,7 +33,7 @@ CARP COOP
     :members:
 
 Utility
-==========
+############
 
 .. autofunction:: carp.pytorch.data.utils.data_util.create_tok
 .. autofunction:: carp.pytorch.data.utils.data_util.chunkBatchElement
