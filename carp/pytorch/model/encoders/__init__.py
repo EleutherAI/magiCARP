@@ -104,7 +104,7 @@ class BaseEncoder(nn.Module):
     def last_ones(self, t):
         # Multipliying arange by max
         # makes last non zero column have largest number in arange
-        t = t * torch.arange(t.shape[1])
+        t = t * torch.arange(t.shape[1]).to(t)
         # Then argmax gives index of last non zero column
         t = t.argmax(1)
         return t
