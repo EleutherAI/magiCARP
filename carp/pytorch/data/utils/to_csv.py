@@ -58,10 +58,16 @@ def write_dataset_csv(data, filepath):
 if __name__ == "__main__":
     train_set, val_set = get_dataset(100,dupe_protection=False)
     train_set = list(map(lambda x: list(x), train_set))
-    val_stories = list(map(lambda x: ["", list(x)[0]], val_set))
-    val_critis = list(map(lambda x: ["", list(x)[1]], val_set))
 
-    write_dataset_csv(train_set, 'train.csv')
+    train_stories = list(map(lambda x: ["", list(x)[0]], train_set))
+    train_crits = list(map(lambda x: ["", list(x)[0]], train_set))
+
+    val_stories = list(map(lambda x: ["", list(x)[0]], val_set))
+    val_crits = list(map(lambda x: ["", list(x)[1]], val_set))
+
+    write_dataset_csv(train_stories, 'train_stories.csv')
+    write_dataset_csv(train_crits, 'train_crits.csv')
+
     write_dataset_csv(val_stories, 'val_stories.csv')
-    write_dataset_csv(val_critis, 'val_crits.csv')
+    write_dataset_csv(val_crits, 'val_crits.csv')
 
