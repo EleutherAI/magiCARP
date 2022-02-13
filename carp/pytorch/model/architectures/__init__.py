@@ -159,29 +159,6 @@ class BaseModel(nn.Module):
         loss_t = F.cross_entropy(logits.T, labels)
         return (loss_i + loss_t) / 2
 
-    def reduced_contrastive_loss(
-        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"], reviews_per_passage: int
-    ) -> TensorType[(), float]:
-
-        n = x.shape[0]
-        # small term added to avoid nans in low precision softmax
-        #(num_passages, num_reviews)
-        logits = self.cosine_sim(x,y) * self.logit_scale.exp()
-        print(logits.size())
-        logits = F.softmax(logits, dim=-1)
-        print(logits.size())
-        logits = torch.sum(logits.reshape((n,-1,reviews_per_passage)), dim=-1)
-        #Reduce logits into diagonal
-
-        labels = torch.arange(n, device=self.config.device)
-
-        print(logits.size())
-        print(labels.size())
-
-        loss_i = F.nll_loss(logits, labels)
-        loss_t = F.nll_loss(logits.T, labels)
-        return (loss_i + loss_t) / 2
-
     def clamp(self):
         with torch.no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)

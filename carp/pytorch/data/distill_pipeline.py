@@ -55,7 +55,9 @@ class DistillDataPipeline(BaseDataPipeline):
 			#Expects us to double reviews beforehand: passing in list of critiques for each story
 			passages, review_lists = zip(*data)
 			reviews_per_passage = len(review_lists[0])
+			print(reviews_per_passage)
 			reviews = [review for review_list in review_lists for review in review_list]
+			print(len(reviews))
 			pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
 			pass_masks = pass_tokens["attention_mask"]
 			rev_masks = rev_tokens["attention_mask"]
