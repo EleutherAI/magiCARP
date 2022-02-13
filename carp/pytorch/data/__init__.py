@@ -16,7 +16,7 @@ _DATAPIPELINE: Dict[str, any] = {}  # registry
 
 
 def register_datapipeline(name):
-    """Decorator used register a CARP architecture 
+    """Decorator used register a CARP architecture
 
         Args:
             name: Name of the architecture
@@ -72,7 +72,6 @@ class BaseDataPipeline(Dataset):
 
     @staticmethod
     def create_tokenizer_factory(call_tokenizer: Callable, tokenizer_factory: Callable, context_len: int) -> Callable:
-
         """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
 
         Args:
@@ -114,9 +113,9 @@ class BaseDataPipeline(Dataset):
 
         return collate
 
-
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
+from carp.pytorch.data.distill_pipeline import DistillDataPipeline
 
 
 def get_datapipeline(name):
