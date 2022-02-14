@@ -14,3 +14,4 @@ carp/dataset/dataset_dict.json
 carp/dataset/train/cache-a5b0849dd9416bdb.arrow
 carp/dataset/train/dataset_info.json
 carp/dataset/train/state.json
+*.csv
