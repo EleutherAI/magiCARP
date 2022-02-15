@@ -15,3 +15,4 @@ carp/dataset/train/cache-a5b0849dd9416bdb.arrow
 carp/dataset/train/dataset_info.json
 carp/dataset/train/state.json
 *.csv
+/carp/experiments/distil_carp/20B_tokenizer.json
