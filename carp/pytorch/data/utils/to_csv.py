@@ -60,7 +60,7 @@ if __name__ == "__main__":
     train_set = list(map(lambda x: list(x), train_set))
 
     train_stories = list(map(lambda x: ["", list(x)[0]], train_set))
-    train_crits = list(map(lambda x: ["", list(x)[0]], train_set))
+    train_crits = list(map(lambda x: ["", list(x)[1]], train_set))
 
     val_stories = list(map(lambda x: ["", list(x)[0]], val_set))
     val_crits = list(map(lambda x: ["", list(x)[1]], val_set))

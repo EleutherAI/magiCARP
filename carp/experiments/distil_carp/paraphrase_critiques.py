@@ -30,7 +30,7 @@ data = read_dataset_component(filepath)
 batch_size = 100
 num_batches = (len(data) + batch_size - 1) // batch_size
 output_file = 'paraphrase_train_crits.csv'
-write_thresh = 10000
+write_thresh = 1000
 temp_csv = []
 print(len(data))
 for i in tqdm(range(num_batches)):

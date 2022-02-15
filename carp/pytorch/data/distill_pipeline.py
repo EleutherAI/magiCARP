@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from torchtyping import TensorType
 from typing import List
 import torch
+import os
 
 #TODO:
 '''Custom chunk_batch_element
@@ -30,11 +31,35 @@ class DistillDataPipeline(BaseDataPipeline):
 		dupe_protection: bool = True,
 		path: str = "dataset",
 	):
-		super().__init__(dupe_protection, path)
+		data = []
+		crit_datapath = path+'/paraphrase_train_crits'
+		files = os.listdir(crit_datapath)
+		files.sort()
+		for file in files:
+			print(file)
+			with open(os.path.join(crit_datapath,file), 'r') as f:
+				temp_data = f.readlines()
+				temp_data = [ele.split(',') for ele in temp_data]
+				data+=temp_data
+		self.reviews_list = data
+
+		story_file = 'train_stories.csv'
+		story_datapath = os.path.join(path, story_file)
+		with open(story_datapath, 'r') as f:
+			story_data = f.readlines()
+		for i, datapoint in enumerate(data):
+			if datapoint[0] == ',':
+				story_data[i] = datapoint[1:]
+		self.passages = story_data
+
+		print("NUM STORIES: ", len(self.passages))
+		print("NUM CRITIQUE LISTS: ", len(self.reviews_list))
+		print("NUM CRITIQUES PER: ", len(self.reviews_list[0]))
+
 
 	#Overload for data format (passage, [crit_1,...,crit_n])
 	def __getitem__(self, index: int) -> Tuple[str, List[str]]:
-		return self.passages[index], [self.reviews[index]]*2
+		return self.passages[index], self.reviews_list[index]
 
 	@staticmethod
 	def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
