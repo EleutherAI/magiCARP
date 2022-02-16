@@ -5,6 +5,23 @@ from torchtyping import TensorType
 from dataclasses import dataclass
 import torch
 import math
+import csv
+
+def read_dataset_component(filepath):
+    data = list()
+    with open(filepath, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=",", quoting=csv.QUOTE_MINIMAL)
+        for row in reader:
+            data.append(row[1])
+    return data
+
+def read_paraphrase_component(filepath):
+    data = list()
+    with open(filepath, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=",", quoting=csv.QUOTE_MINIMAL)
+        for row in reader:
+            data.append(row)
+    return data
 
 def check_char(char):
     """Check if char can be encoded"""
@@ -85,8 +102,8 @@ def create_tok(tokenizer : Callable, context_len : int):
 
 @dataclass
 class BatchElement:
-    input_ids : TensorType[-1, "pass_N"] 
-    mask : TensorType[-1, "pass_N"] 
+    input_ids : TensorType[-1, "pass_N"]
+    mask : TensorType[-1, "pass_N"]
 
 # Assumes first axis of all tensor attributes in data are the same
 # If no tensor attributes, returns original data object
@@ -105,7 +122,7 @@ def chunkBatchElement(data : BatchElement, chunk_size : int) -> List[BatchElemen
             is_tensor.append(True)
         else:
             is_tensor.append(False)
-    
+
     # If no tensor type just return
     has_tensor = False
     for t in is_tensor:
@@ -133,7 +150,7 @@ def chunkBatchElement(data : BatchElement, chunk_size : int) -> List[BatchElemen
                 data_args.append(vars(data)[key][inds])
             else:
                 data_args.append(vars(data)[key])
-        
+
         new_datas.append(data_class(*data_args))
 
     return new_datas

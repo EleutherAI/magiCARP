@@ -54,7 +54,7 @@ class DistillCARP(BaseModel):
 		labels = torch.arange(n, device=self.config.device)
 		loss_i = F.nll_loss(torch.log(reduced_logits_i), labels)
 		loss_t = F.nll_loss(torch.log(reduced_logits_t.T), labels)
-		print(loss_i, loss_t)
+		#print(loss_i, loss_t)
 		return (loss_i + loss_t) / 2
 
 
@@ -67,7 +67,7 @@ class DistillCARP(BaseModel):
 		scaler: torch.cuda.amp.GradScaler,
 	) -> Dict[str, TensorType[()]]:
 
-		print('train_step reviews', reviews.input_ids.size())
+		#print('train_step reviews', reviews.input_ids.size())
 		self.reviews_per_passage = reviews.input_ids.size()[0] // passages.input_ids.size()[0]
 
 		microbatch_inds_passages = generate_indices(
@@ -89,7 +89,7 @@ class DistillCARP(BaseModel):
 		# Initially get all encodings without grad
 		pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 
-		print('rev_encs size', len(rev_encs))
+		#print('rev_encs size', len(rev_encs))
 
 		#compute accuracy
 		forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))

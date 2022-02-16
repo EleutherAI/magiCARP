@@ -65,6 +65,9 @@ if __name__ == "__main__":
     val_stories = list(map(lambda x: ["", list(x)[0]], val_set))
     val_crits = list(map(lambda x: ["", list(x)[1]], val_set))
 
+    print(len(train_stories))
+    print(len(train_crits))
+
     write_dataset_csv(train_stories, 'train_stories.csv')
     write_dataset_csv(train_crits, 'train_crits.csv')
 
