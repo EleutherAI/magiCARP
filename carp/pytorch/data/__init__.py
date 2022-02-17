@@ -14,8 +14,9 @@ from carp.pytorch.model.encoders import BaseEncoder
 # specifies a dictionary of architectures
 _DATAPIPELINE: Dict[str, any] = {}  # registry
 
+
 def register_datapipeline(name):
-    """Decorator used register a CARP architecture 
+    """Decorator used register a CARP architecture
 
         Args:
             name: Name of the architecture
@@ -29,7 +30,7 @@ def register_datapipeline(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
-    
+
     cls = name
     name = cls.__name__
     register_class(cls, name.lower())
@@ -42,9 +43,9 @@ class BaseDataPipeline(Dataset):
     """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
 
     def __init__(
-        self,
-        dupe_protection: bool = True,
-        path: str = "dataset",
+            self,
+            dupe_protection: bool = True,
+            path: str = "dataset",
     ):
         dataset = load_from_disk(path)
         train = dataset["train"]
@@ -70,8 +71,7 @@ class BaseDataPipeline(Dataset):
         return len(self.passages)
 
     @staticmethod
-    def create_tokenizer_factory(call_tokenizer : Callable, tokenizer_factory : Callable, context_len : int) -> Callable:
-        
+    def create_tokenizer_factory(call_tokenizer: Callable, tokenizer_factory: Callable, context_len: int) -> Callable:
         """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
 
         Args:
@@ -85,7 +85,7 @@ class BaseDataPipeline(Dataset):
         return partial(tokenizer_factory, tok_func)
 
     @staticmethod
-    def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
+    def tokenizer_factory(_tok: Callable, encoder: BaseEncoder) -> Callable:
 
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
@@ -95,9 +95,10 @@ class BaseDataPipeline(Dataset):
         Returns:
             Callable: A function that will take a batch of string tuples and tokenize them properly.
         """
+
         @typechecked
         def collate(
-            data: Iterable[Tuple[str, str]]
+                data: Iterable[Tuple[str, str]]
         ) -> Tuple[BatchElement, BatchElement]:
             passages, reviews = zip(*data)
             pass_tokens, rev_tokens = _tok(list(passages)), _tok(list(reviews))
@@ -111,12 +112,15 @@ class BaseDataPipeline(Dataset):
             )
 
         return collate
-    
+
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
+from carp.pytorch.data.distill_pipeline import DistillDataPipeline
+
 
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]
+
 
 def get_datapipeline_names():
     return _DATAPIPELINE.keys()

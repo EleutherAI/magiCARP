@@ -18,7 +18,7 @@ from carp.pytorch.model.encoders import get_encoder
 _ARCHITECTURES: Dict[str, any] = {}  # registry
 
 def register_architecture(name):
-    """Decorator used register a CARP architecture 
+    """Decorator used register a CARP architecture
 
         Args:
             name: Name of the architecture
@@ -32,7 +32,7 @@ def register_architecture(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
-    
+
     cls = name
     name = cls.__name__
     register_class(cls, name.lower())
@@ -65,7 +65,7 @@ class BaseModel(nn.Module):
             )
             self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
             self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
-        # used to count the number of steps until the next accumulation 
+        # used to count the number of steps until the next accumulation
         self.accum_step = 0
         self.config = config
     @abstractmethod
@@ -87,12 +87,12 @@ class BaseModel(nn.Module):
         """
         Attempts to load a component of the model. Throws an exception and continues if the component cannot be loaded
         Args:
-            path : directory to load from 
+            path : directory to load from
             component_name : name of component to append onto path
         Returns:
             component : nn.module
         """
-        try: 
+        try:
             return torch.load(path + component_name)
         except:
             print("Unable to load " + component_name + ". Continuing.")
@@ -110,7 +110,7 @@ class BaseModel(nn.Module):
             pass
 
 
-    # must be run after initialize 
+    # must be run after initialize
     def load(self, path : str):
         self.passage_encoder.model = self.attempt_load(path, "passage_encoder.pt")
         self.review_encoder.model = self.attempt_load(path, "review_encoder.pt")
@@ -131,7 +131,7 @@ class BaseModel(nn.Module):
             acc_t = (torch.argmax(logits, dim=0) == labels).sum()
         return (acc_i + acc_t) / n / 2
     def cosine_sim(self,\
-        x: TensorType[-1, "latent_dim"],        
+        x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"]):
         """
         Computes the cosine similarity between two sets of vectors x,y
@@ -145,7 +145,7 @@ class BaseModel(nn.Module):
         x = F.normalize(x)
         y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        return (x @ y.T + 1e-6) 
+        return (x @ y.T + 1e-6)
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
@@ -158,7 +158,7 @@ class BaseModel(nn.Module):
         loss_i = F.cross_entropy(logits, labels)
         loss_t = F.cross_entropy(logits.T, labels)
         return (loss_i + loss_t) / 2
-        
+
     def clamp(self):
         with torch.no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
@@ -183,10 +183,10 @@ class BaseModel(nn.Module):
                 self.review_encoder.d_model, self.latent_dim, config.proj_dropout
             )
         return proj_pass, proj_rev
-            
+
     def _embed_data(
         self,
-        x: BatchElement, 
+        x: BatchElement,
         encoder,
         projector,
     ):
@@ -218,7 +218,7 @@ class BaseModel(nn.Module):
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = [self.encode_reviews(r) for r in reviews]
-        
+
         # if we only need the embeddings, fetch them
         if return_only_embeddings:
             pass_encs = list(map(lambda x: x.hidden, pass_encs))
@@ -240,7 +240,7 @@ class BaseModel(nn.Module):
         opt : torch.optim.Optimizer):
         if self.accum_step % self.config.grad_accum == 0:
             opt.zero_grad()
-            
+
     def step(self,
         scaler : torch.cuda.amp.GradScaler,
         opt: torch.optim.Optimizer):
@@ -258,7 +258,7 @@ class BaseModel(nn.Module):
         for p, r in dataset:
             passages.append(p)
             reviews.append(r)
-        
+
         # TODO: Ideally should get microbatch size from trainconfig for the second argument
         passages = chunkBatchElement(passages[0], 8)
         reviews = chunkBatchElement(reviews[0], 8)
@@ -297,6 +297,7 @@ from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
 from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoder
+from carp.pytorch.model.architectures.distill_carp import DistillCARP
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
