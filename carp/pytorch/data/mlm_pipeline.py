@@ -9,6 +9,9 @@ from torchtyping import TensorType
 
 @dataclass
 class MLMBatchElement(BatchElement):
+    """ 
+    Wrapper for BatchElement intended for MLM tasks. Contains same attributes in addition to tokens to input for MLM task and MLM mask labels.
+    """
     mlm_input_ids : TensorType[-1, "pass_N"]
     mlm_labels : TensorType[-1, "pass_N"]
 
@@ -16,7 +19,15 @@ class MLMBatchElement(BatchElement):
 @register_datapipeline
 class MLMDataPipeline(BaseDataPipeline):
     
-    """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
+    """Wrapper for Dataset class that specifically eases working with CARP MLM
+    
+    :param dupe_protection: Filters out any passages or reviews of length less than 8. Use if dataset contains repeated phrases (i.e. "lol") to prevent duplicate encodings
+    :type dupe_protection: bool, defaults to True
+
+    :param path: Path to dataset on disk
+    :type path: str, defaults to "dataset"
+    
+    """
     def __init__(
         self,
         dupe_protection: bool = True,
@@ -28,12 +39,15 @@ class MLMDataPipeline(BaseDataPipeline):
     def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
-        Args:
-            tokenizer (PreTrainedTokenizer): A Huggingface model tokenizer, taking strings to torch Tensors
-            context_len (int): Max length of the passages passed to the tokenizer
+        :param _tok: A HuggingFace model tokenizer that turns strings to torch tensors.
+        :type _tok: Callable
 
-        Returns:
-            Callable: A function that will take a batch of string tuples and tokenize them properly.
+        :param encoder: A CARP base encoder module.
+        :type encoder: class:`carp.pytorch.model.encoders.BaseEncoder`
+
+        :return: A function that takes a batch a string tuples then tokenizes them properly.
+        :rtype: Callable
+
         """
         mlm_collator = DataCollatorForLanguageModeling(encoder.tokenizer, mlm=True)
 

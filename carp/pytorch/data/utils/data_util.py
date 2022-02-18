@@ -73,6 +73,18 @@ def filter_empty(passages: List[str], reviews: List[str]) -> None:
             i += 1
 
 def create_tok(tokenizer : Callable, context_len : int):
+    """
+    Truncates tokenizer function.
+
+    :param tokenizer: Function that tokenizes text
+    :type tokenizer: Callable
+
+    :param context_len: Desired context length to truncate sequence to
+    :type context_len: int
+
+    :return: Modified tokenizer function that truncates to context length
+    :rtype: callable
+    """
     @typechecked
     def _tok(string_batch: Iterable[str]) -> BatchEncoding:
         for i, _ in enumerate(string_batch):
@@ -85,12 +97,28 @@ def create_tok(tokenizer : Callable, context_len : int):
 
 @dataclass
 class BatchElement:
+    """
+    Dataclass that stores a batch consisting of tokens (input_ids) and a mask over said tokens.
+    """
     input_ids : TensorType[-1, "pass_N"] 
     mask : TensorType[-1, "pass_N"] 
 
 # Assumes first axis of all tensor attributes in data are the same
 # If no tensor attributes, returns original data object
 def chunkBatchElement(data : BatchElement, chunk_size : int) -> List[BatchElement]:
+    """
+    Breaks up all TensorType attributes into chunks, putting each chunk in a different BatchElement,
+    effectively chunking the entire BatchElement object.
+
+    :param data: The BatchElement being chunked.
+    :type data: BatchElement
+
+    :param chunk_size: Size of each chunk (i.e. batch size of each chunk)
+    :type chunk_size: int
+
+    :return: List of chunks (BatchElements)
+    :rtype: List[BatchElement]
+    """
     keys = list(vars(data).keys())
     n_keys = len(keys)
     is_tensor = []

@@ -15,10 +15,11 @@ from carp.pytorch.model.encoders import BaseEncoder
 _DATAPIPELINE: Dict[str, any] = {}  # registry
 
 def register_datapipeline(name):
-    """Decorator used register a CARP architecture 
+    """Decorator used to register a CARP architecture 
 
-        Args:
-            name: Name of the architecture
+    :param name: Name of architecture being registered.
+    :type name: str
+
     """
 
     def register_class(cls, name):
@@ -39,8 +40,15 @@ def register_datapipeline(name):
 
 @register_datapipeline
 class BaseDataPipeline(Dataset):
-    """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
+    """Wrapper for Dataset class that eases working with the CARP dataset and Pytorch data utilities.
+    
+    :param dupe_protection: Filters out any passages or reviews of length less than 8. Use if dataset contains repeated phrases (i.e. "lol") to prevent duplicate encodings
+    :type dupe_protection: bool, defaults to True
 
+    :param path: Path to dataset on disk
+    :type path: str, defaults to "dataset"
+
+    """
     def __init__(
         self,
         dupe_protection: bool = True,
@@ -74,12 +82,18 @@ class BaseDataPipeline(Dataset):
         
         """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
 
-        Args:
-            call_tokenizer (Callable): A function defined within BaseEncoder that outlines a custom encoder processing step
-            tokenizer_factory (Callable): The factory we wish to initialize
-            context_len (int): Max context length of a batch element.
-        Returns:
-            Callable: A function that create a factory that will take a batch of string tuples and tokenize them properly.
+        :param call_tokenizer: A function defined within BaseEncoder that outlines a custom encoder processing step.
+        :type call_tokenizer: Callable
+
+        :param tokenizer_factory: The factory we wish to initialize.
+        :type tokenizer_factory: Callable
+
+        :param context_len: Max context length of any batch element.
+        :type context_len: int
+        
+        :return: A function that creates a factory, which itself take a batch of string tuples then tokenizes them properly.
+        :rtype: Callable
+
         """
         tok_func = create_tok(call_tokenizer, context_len=context_len)
         return partial(tokenizer_factory, tok_func)
@@ -89,11 +103,14 @@ class BaseDataPipeline(Dataset):
 
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
-        Args:
-            _tok (Callable): A Huggingface model tokenizer, taking strings to torch Tensors
-            encoder (BaseEncoder): A CARP base encoder module.
-        Returns:
-            Callable: A function that will take a batch of string tuples and tokenize them properly.
+        :param _tok: A HuggingFace model tokenizer that turns strings to torch tensors.
+        :type _tok: Callable
+
+        :param encoder: A CARP base encoder module.
+        :type encoder: class:`carp.pytorch.model.encoders.BaseEncoder`
+
+        :return: A function that takes a batch a string tuples then tokenizes them properly.
+        :rtype: Callable
         """
         @typechecked
         def collate(
