@@ -1,31 +1,36 @@
-import torch
-import torch.nn.functional as F
-import numpy as np
-from torchtyping import TensorType, patch_typeguard
-from typeguard import typechecked
-from dataclasses import dataclass
-from carp.configs import CARPConfig, ModelConfig, TrainConfig
-from carp.pytorch.data.scarecrow_pipeline import BatchElement, ScarecrowTargetElement
-from carp.pytorch.model.architectures import * 
-from carp.pytorch.model.encoders import BaseEncoder, BaseEncoderOutput, get_encoder
-from carp.util import generate_indices
+import os
 from typing import List
 
-import os
-os.environ["TOKENIZERS_PARALLELISM"] = "true"
+import numpy as np
 
+from carp.configs import ModelConfig
+from carp.pytorch.data.scarecrow_pipeline import ScarecrowTargetElement
+from carp.pytorch.model.architectures import *
+from carp.pytorch.model.encoders import BaseEncoder, BaseEncoderOutput
+from carp.util import generate_indices
+
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 
 # Written by MicPie
 class PromptLayer(nn.Module):
-    def __init__(self, encoder : BaseEncoder,
-        labels : List[str] = 
-        ['Off-prompt', 'Grammar Usage',
-        'Needs Google', 'Incoherent', 
-        'Technical Jargon', 'Redundant'], 
-        n_ctx : int = 10, ctx_dim : int = 1024):
-
+    def __init__(
+        self,
+        encoder: BaseEncoder,
+        labels: List[str] = None,
+        n_ctx: int = 10,
+        ctx_dim: int = 1024,
+    ):
         super().__init__()
+        if labels is None:
+            labels = [
+                "Off-prompt",
+                "Grammar Usage",
+                "Needs Google",
+                "Incoherent",
+                "Technical Jargon",
+                "Redundant",
+            ]
 
         self.labels = labels
         self.n_labels = len(labels)
@@ -33,55 +38,66 @@ class PromptLayer(nn.Module):
         # Random init n_ctx vectors of dim ctx_dim,
         # can also initialize context vectors to something else like in the paper.
         ctx_vectors = torch.empty(n_ctx, ctx_dim)
-        nn.init.normal_(ctx_vectors, std=0.02) # std = 0.02 from appendix A
-        self.ctx = nn.Parameter(ctx_vectors) # learnable
+        nn.init.normal_(ctx_vectors, std=0.02)  # std = 0.02 from appendix A
+        self.ctx = nn.Parameter(ctx_vectors)  # learnable
         self.n_ctx = n_ctx
         self.ctx_dim = ctx_dim
 
         toks = [encoder.call_tokenizer(l) for l in labels]
-        with torch.no_grad(): # not needed?
-            toks_embs_masks = [{
-                'input_ids': t['input_ids'],
-                'input_embs': encoder.model.embeddings(t['input_ids']),
-                'attention_mask': t['attention_mask']}
-            for t in toks]
+        with torch.no_grad():  # not needed?
+            toks_embs_masks = [
+                {
+                    "input_ids": t["input_ids"],
+                    "input_embs": encoder.model.embeddings(t["input_ids"]),
+                    "attention_mask": t["attention_mask"],
+                }
+                for t in toks
+            ]
         del toks
 
-        seq_len_max = np.max([e['input_embs'].shape[1] for e in toks_embs_masks])
+        seq_len_max = np.max([e["input_embs"].shape[1] for e in toks_embs_masks])
 
         self.toks = torch.zeros(self.n_labels, seq_len_max, dtype=torch.int)
         embs = torch.zeros(self.n_labels, seq_len_max, ctx_dim, dtype=torch.float)
         masks = torch.zeros(self.n_labels, seq_len_max, dtype=torch.bool)
 
         for i, e in enumerate(toks_embs_masks):
-            self.toks[i,:e['input_ids'].shape[1]] = e['input_ids']
-            embs[i,:e['input_embs'].shape[1]] = e['input_embs'].squeeze(0)
-            masks[i,:e['attention_mask'].shape[1]] = e['attention_mask']
+            self.toks[i, : e["input_ids"].shape[1]] = e["input_ids"]
+            embs[i, : e["input_embs"].shape[1]] = e["input_embs"].squeeze(0)
+            masks[i, : e["attention_mask"].shape[1]] = e["attention_mask"]
 
-        self.prefix_embs = embs[:, :1, :].cuda() # sos
-        self.suffix_embs = embs[:, 1:, :].cuda() # cls, eos
-        self.prefix_masks = masks[:, :1].cuda() # sos
-        self.suffix_masks = masks[:, 1:].cuda() # cls, eos
+        self.prefix_embs = embs[:, :1, :].cuda()  # sos
+        self.suffix_embs = embs[:, 1:, :].cuda()  # cls, eos
+        self.prefix_masks = masks[:, :1].cuda()  # sos
+        self.suffix_masks = masks[:, 1:].cuda()  # cls, eos
 
         self.prefix_embs.requires_grad = True
         self.suffix_embs.requires_grad = True
 
     def forward(self):
         ctx = self.ctx
-        if ctx.dim() == 2: # With the current setup this is always needed! TO DO: Check!
+        if (
+            ctx.dim() == 2
+        ):  # With the current setup this is always needed! TO DO: Check!
             ctx = ctx.unsqueeze(0).expand(self.n_labels, self.n_ctx, self.ctx_dim)
 
-        prompts = torch.cat([
-            self.prefix_embs, # [n_labels, 1,     dim]
-            ctx,              # [n_labels, n_ctx, dim]
-            self.suffix_embs  # [n_labels, *,     dim]
-        ], dim=1)
+        prompts = torch.cat(
+            [
+                self.prefix_embs,  # [n_labels, 1,     dim]
+                ctx,  # [n_labels, n_ctx, dim]
+                self.suffix_embs,  # [n_labels, *,     dim]
+            ],
+            dim=1,
+        )
 
-        masks = torch.cat([
-            self.prefix_masks,  # [n_labels, 1]
-            torch.ones((self.n_labels, self.n_ctx)).cuda(), # [n_labels, n_ctx]
-            self.suffix_masks   # [n_labels, *]
-        ], dim=1)
+        masks = torch.cat(
+            [
+                self.prefix_masks,  # [n_labels, 1]
+                torch.ones((self.n_labels, self.n_ctx)).cuda(),  # [n_labels, n_ctx]
+                self.suffix_masks,  # [n_labels, *]
+            ],
+            dim=1,
+        )
 
         return prompts, masks
 
@@ -90,6 +106,7 @@ class PromptLayer(nn.Module):
 #  Useful for downstream tasks
 # TODO: Custom training routine. Might need to abstract training significantly
 patch_typeguard()
+
 
 @typechecked
 @register_architecture
@@ -101,6 +118,7 @@ class CARPCoOp(BaseModel):
 
         # required for CoOp
         self.freeze_encoders()
+
     # freezes encoder and projection layer
     def freeze_encoders(self):
         for params in self.passage_encoder.parameters():
@@ -112,26 +130,24 @@ class CARPCoOp(BaseModel):
         for params in self.rev_projector.parameters():
             params.requires_grad_(False)
 
-    def save(self, path : str):
+    def save(self, path: str):
         torch.save(self.review_encoder_CoOp, path + "review_encoder_CoOp.pt")
         super().save(path)
 
-    def load(self, path : str):
+    def load(self, path: str):
         try:
             self.review_encoder_CoOp = torch.load(path + "review_encoder_CoOp.pt")
         except:
-            print("Unable to load review_encoder_CoOp. Randomly initializing and continuing.")
+            print(
+                "Unable to load review_encoder_CoOp. Randomly initializing and continuing."
+            )
         super().load(path)
 
     # uses a constant set of reviews for CoOp
     def calculate_embeddings(
         self,
-        passages: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
-        return_only_embeddings : bool = True,
+        passages: Iterable[Tuple[BatchElement]],
+        return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
@@ -152,55 +168,61 @@ class CARPCoOp(BaseModel):
         y_CoOp = self.review_encoder(y_CoOp, mask_CoOp, inputs_embeds=True)
         return BaseEncoderOutput(self.rev_projector(y_CoOp.hidden))
 
-    def compute_accuracy(self,
+    def compute_accuracy(
+        self,
         x: TensorType["pass_N", "latent_dim"],
         y: TensorType[-1, "latent_dim"],
-        labels: TensorType["pass_N", -1]):
+        labels: TensorType["pass_N", -1],
+    ):
         """Computes KL divergence against target CoOp distribution
 
-            Args:
-                x: Tensor of passage encodings
-                y: Tensor of review encodings, with concat soft prompt embeddings
-                labels: Target distribution
-            Returns:
-                loss: Float (without gradient)
+        Args:
+            x: Tensor of passage encodings
+            y: Tensor of review encodings, with concat soft prompt embeddings
+            labels: Target distribution
+        Returns:
+            loss: Float (without gradient)
         """
         with torch.no_grad():
             x = F.normalize(x)
             y = F.normalize(y)
             logits = F.softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
             labels = labels.argmax(1)
-            acc = (torch.argmax(logits, dim = 1) == labels).sum()
-        return acc/x.shape[0]
+            acc = (torch.argmax(logits, dim=1) == labels).sum()
+        return acc / x.shape[0]
 
-    def CoOp_loss(self, 
+    def CoOp_loss(
+        self,
         x: TensorType["pass_N", "latent_dim"],
         y: TensorType[-1, "latent_dim"],
-        labels: TensorType["pass_N", -1]):
+        labels: TensorType["pass_N", -1],
+    ):
         """Computes KL divergence against target CoOp distribution
 
-            Args:
-                x: Tensor of passage encodings
-                y: Tensor of review encodings, with concat soft prompt embeddings
-                labels: Target distribution
-            Returns:
-                loss: Float (with gradient)
+        Args:
+            x: Tensor of passage encodings
+            y: Tensor of review encodings, with concat soft prompt embeddings
+            labels: Target distribution
+        Returns:
+            loss: Float (with gradient)
         """
         x = F.normalize(x)
         y = F.normalize(y)
         logits = F.log_softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
-        return F.kl_div(logits.float(), labels.float(), reduction='batchmean')
-    
+        return F.kl_div(logits.float(), labels.float(), reduction="batchmean")
+
     def eval_step(self, dataset):
         passages = []
         reviews = []
         for p, r in dataset:
             passages.append(p)
             reviews.append(r)
-        
+
         # TODO: Ideally should get microbatch size from trainconfig for the second argument
         passages = chunkBatchElement(passages[0], 8)
-        rev_labels = torch.cat(list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0)
+        rev_labels = torch.cat(
+            list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0
+        )
 
         with torch.no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages)
@@ -208,6 +230,7 @@ class CARPCoOp(BaseModel):
             val_acc = self.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
+
     def train_step(
         self,
         passages: BatchElement,
@@ -221,7 +244,8 @@ class CARPCoOp(BaseModel):
         )
         # Split tokens and masks into these microbatches
         pass_mbs: List[BatchElement] = [
-            BatchElement(passages.input_ids[i], passages.mask[i]) for i in microbatch_inds
+            BatchElement(passages.input_ids[i], passages.mask[i])
+            for i in microbatch_inds
         ]
         # create array of rev_labels and cast to GPU
         rev_labels: List[torch.tensor] = [
@@ -231,8 +255,10 @@ class CARPCoOp(BaseModel):
         # Initially get all encodings without grad
         pass_encs, rev_encs = self.calculate_embeddings(pass_mbs)
 
-        #compute accuracy. We need labels for CoOp accuracy
-        forward_acc = self.compute_accuracy(torch.cat(pass_encs), rev_encs, torch.cat(rev_labels))
+        # compute accuracy. We need labels for CoOp accuracy
+        forward_acc = self.compute_accuracy(
+            torch.cat(pass_encs), rev_encs, torch.cat(rev_labels)
+        )
 
         # does gradient accumulation
         self.zero_grad(opt)
@@ -242,9 +268,10 @@ class CARPCoOp(BaseModel):
             pass_tmp = pass_encs.copy()
             with torch.cuda.amp.autocast():
                 pass_tmp[index] = self.encode_passages(passage).hidden
-                loss  = self.CoOp_loss(
-                    torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels))
-                    
+                loss = self.CoOp_loss(
+                    torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels)
+                )
+
             scaler.scale(loss).backward()
 
         # Clipping

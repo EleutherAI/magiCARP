@@ -7,6 +7,7 @@
 clip/wandb
 .ipynb_checkpoints/
 .venv/
+.idea
 .pytest_cache/
 carp/wandb/
 wandb/

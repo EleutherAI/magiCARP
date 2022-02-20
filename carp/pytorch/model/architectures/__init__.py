@@ -1,27 +1,28 @@
 from __future__ import annotations
-from abc import abstractmethod
 
 import sys
-from typing import Dict, Tuple, Iterable, List
-from torchtyping import TensorType, patch_typeguard
-from typeguard import typechecked
+from abc import abstractmethod
+from typing import Dict, Iterable, Tuple
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torchtyping import TensorType, patch_typeguard
+from typeguard import typechecked
 
-from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
 from carp.configs import TrainConfig
+from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
 from carp.pytorch.model.encoders import get_encoder
 
 # specifies a dictionary of architectures
 _ARCHITECTURES: Dict[str, any] = {}  # registry
 
-def register_architecture(name):
-    """Decorator used register a CARP architecture 
 
-        Args:
-            name: Name of the architecture
+def register_architecture(name):
+    """Decorator used register a CARP architecture
+
+    Args:
+        name: Name of the architecture
     """
 
     def register_class(cls, name):
@@ -32,7 +33,7 @@ def register_architecture(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
-    
+
     cls = name
     name = cls.__name__
     register_class(cls, name.lower())
@@ -41,6 +42,7 @@ def register_architecture(name):
 
 
 patch_typeguard()
+
 
 @typechecked
 class BaseModel(nn.Module):
@@ -51,25 +53,26 @@ class BaseModel(nn.Module):
         if not skip_init:
             self.config = config
             encoder_class = get_encoder(config.encoder_type)
-            self.passage_encoder = encoder_class(
-                config.model_path, config.model_arch
-            )
-            self.review_encoder = encoder_class(
-                config.model_path, config.model_arch
-            )
+            self.passage_encoder = encoder_class(config.model_path, config.model_arch)
+            self.review_encoder = encoder_class(config.model_path, config.model_arch)
             self.latent_dim = self.config.latent_dim
-            self.pass_projector, self.rev_projector = self._make_projection_layers(self.config)
+            self.pass_projector, self.rev_projector = self._make_projection_layers(
+                self.config
+            )
             self.logit_scale = nn.Parameter(
                 torch.ones([], device=self.config.device)
                 * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
             )
-            self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
+            self.clamp_min = torch.log(
+                torch.tensor([1 / 100], device=self.config.device)
+            )
             self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
-        # used to count the number of steps until the next accumulation 
+        # used to count the number of steps until the next accumulation
         self.accum_step = 0
         self.config = config
+
     @abstractmethod
-    def attempt_save(cls, component, path : str, component_name : str):
+    def attempt_save(cls, component, path: str, component_name: str):
         """
         Attempts to save a component of the model. Throws an exception and continues if the component cannot be saved
         Args:
@@ -83,22 +86,22 @@ class BaseModel(nn.Module):
             print("Unable to save " + component_name + ". Continuing.")
 
     @abstractmethod
-    def attempt_load(cls, path : str, component_name : str):
+    def attempt_load(cls, path: str, component_name: str):
         """
         Attempts to load a component of the model. Throws an exception and continues if the component cannot be loaded
         Args:
-            path : directory to load from 
+            path : directory to load from
             component_name : name of component to append onto path
         Returns:
             component : nn.module
         """
-        try: 
+        try:
             return torch.load(path + component_name)
         except:
             print("Unable to load " + component_name + ". Continuing.")
 
     # saves the model to the output directory. saved in chunks so that config can be swapped later
-    def save(self, path : str):
+    def save(self, path: str):
         self.attempt_save(self.passage_encoder.model, path, "passage_encoder.pt")
         self.attempt_save(self.review_encoder.model, path, "review_encoder.pt")
 
@@ -109,9 +112,8 @@ class BaseModel(nn.Module):
         except:
             pass
 
-
-    # must be run after initialize 
-    def load(self, path : str):
+    # must be run after initialize
+    def load(self, path: str):
         self.passage_encoder.model = self.attempt_load(path, "passage_encoder.pt")
         self.review_encoder.model = self.attempt_load(path, "review_encoder.pt")
 
@@ -120,7 +122,9 @@ class BaseModel(nn.Module):
 
         self.logit_scale = self.attempt_load(path, "logit_scale.pt")
 
-    def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
+    def compute_accuracy(
+        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
+    ):
         with torch.no_grad():
             n = x.shape[0]
             x = F.normalize(x)
@@ -130,9 +134,10 @@ class BaseModel(nn.Module):
             acc_i = (torch.argmax(logits, dim=1) == labels).sum()
             acc_t = (torch.argmax(logits, dim=0) == labels).sum()
         return (acc_i + acc_t) / n / 2
-    def cosine_sim(self,\
-        x: TensorType[-1, "latent_dim"],        
-        y: TensorType[-1, "latent_dim"]):
+
+    def cosine_sim(
+        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
+    ):
         """
         Computes the cosine similarity between two sets of vectors x,y
         Args:
@@ -145,7 +150,7 @@ class BaseModel(nn.Module):
         x = F.normalize(x)
         y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        return (x @ y.T + 1e-6) 
+        return x @ y.T + 1e-6
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
@@ -153,12 +158,12 @@ class BaseModel(nn.Module):
 
         n = x.shape[0]
         # small term added to avoid nans in low precision softmax
-        logits = self.cosine_sim(x,y) * self.logit_scale.exp()
+        logits = self.cosine_sim(x, y) * self.logit_scale.exp()
         labels = torch.arange(n, device=self.config.device)
         loss_i = F.cross_entropy(logits, labels)
         loss_t = F.cross_entropy(logits.T, labels)
         return (loss_i + loss_t) / 2
-        
+
     def clamp(self):
         with torch.no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
@@ -183,10 +188,10 @@ class BaseModel(nn.Module):
                 self.review_encoder.d_model, self.latent_dim, config.proj_dropout
             )
         return proj_pass, proj_rev
-            
+
     def _embed_data(
         self,
-        x: BatchElement, 
+        x: BatchElement,
         encoder,
         projector,
     ):
@@ -202,23 +207,15 @@ class BaseModel(nn.Module):
 
     def calculate_embeddings(
         self,
-        passages: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
-        reviews: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
-        return_only_embeddings : bool = True,
+        passages: Iterable[Tuple[BatchElement]],
+        reviews: Iterable[Tuple[BatchElement]],
+        return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
         with torch.no_grad(), torch.cuda.amp.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = [self.encode_reviews(r) for r in reviews]
-        
+
         # if we only need the embeddings, fetch them
         if return_only_embeddings:
             pass_encs = list(map(lambda x: x.hidden, pass_encs))
@@ -236,14 +233,11 @@ class BaseModel(nn.Module):
         raise NotImplementedError("Must be overridden.")
 
     # used to account for gradient accumulations
-    def zero_grad(self,
-        opt : torch.optim.Optimizer):
+    def zero_grad(self, opt: torch.optim.Optimizer):
         if self.accum_step % self.config.grad_accum == 0:
             opt.zero_grad()
-            
-    def step(self,
-        scaler : torch.cuda.amp.GradScaler,
-        opt: torch.optim.Optimizer):
+
+    def step(self, scaler: torch.cuda.amp.GradScaler, opt: torch.optim.Optimizer):
         if self.accum_step % self.config.grad_accum == 0:
             scaler.step(opt)
             scaler.update()
@@ -251,14 +245,13 @@ class BaseModel(nn.Module):
         else:
             self.accum_step += 1
 
-
     def eval_step(self, dataset):
         passages = []
         reviews = []
         for p, r in dataset:
             passages.append(p)
             reviews.append(r)
-        
+
         # TODO: Ideally should get microbatch size from trainconfig for the second argument
         passages = chunkBatchElement(passages[0], 8)
         reviews = chunkBatchElement(reviews[0], 8)
@@ -291,15 +284,20 @@ class Projection(nn.Module):
         x = x + projected
         return self.layer_norm(x)
 
+
 from carp.pytorch.model.architectures.carp import CARP
-from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
-from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
-from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoder
+from carp.pytorch.model.architectures.carp_mlm import CARPMLM
+from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
+from carp.pytorch.model.architectures.carp_shared_encoder import (
+    CARPSharedEncoder,
+)
+
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
+
 
 def get_architecture_names():
     return _ARCHITECTURES.keys()

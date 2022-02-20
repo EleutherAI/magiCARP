@@ -1,18 +1,16 @@
 # import all new model formats here
+# import config files
+# import decorator
+from carp.pytorch.checkpointing import Converter, register_converter
 from carp.pytorch.model.architectures import *
 from carp.pytorch.model.encoders.pool_encoder import *
 
-# import decorator
-from carp.pytorch.checkpointing import register_converter, Converter
-
-# import config files
-from carp.configs import *
 
 @register_converter("SumTextEncoder", "CARPCoOp")
 class ConvertSumTextEncoderV1SumTextEncoderV2(Converter):
-    def convert(self, path_orig :str, path_dest : str, **kwargs):
+    def convert(self, path_orig: str, path_dest: str, **kwargs):
         carp_model = torch.load(path_orig)
-        
+
         CoOp_model = CARPCoOp(carp_model.config)
 
         # copy all the huggingface models
@@ -25,7 +23,4 @@ class ConvertSumTextEncoderV1SumTextEncoderV2(Converter):
         CoOp_model.rev_projector = carp_model.projB
 
         # save model
-        torch.save(
-            CoOp_model,
-            path_dest
-        )
+        torch.save(CoOp_model, path_dest)

@@ -1,13 +1,11 @@
-from carp.configs import TrainConfig
-from carp.pytorch.training import BaseOrchestrator, register_orchestrator
+from typing import Tuple
+
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR, _LRScheduler
 
 from carp.configs import TrainConfig
 from carp.pytorch.model.architectures import BaseModel
-from torch.optim.lr_scheduler import _LRScheduler, LambdaLR
-from torch.optim import Optimizer
-
-from typing import Tuple
-
+from carp.pytorch.training import BaseOrchestrator, register_orchestrator
 from carp.util import get_scheduling_func
 
 
@@ -16,6 +14,7 @@ class MLMOrchestrator(BaseOrchestrator):
     def __init__(self, config: TrainConfig):
         self.epoch_number = 0
         super().__init__(config)
+
     """
     def after_train_step(self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs)\
         -> Tuple[BaseModel, _LRScheduler, Optimizer]:
@@ -32,14 +31,12 @@ class MLMOrchestrator(BaseOrchestrator):
 
         else:
             self.step_number += 1
-        return model, scheduler, opt
-    
+        return model, scheduler, opt    
     """
-    def on_epoch_start(self,
-        model : BaseModel,
-        scheduler : _LRScheduler,
-        opt : Optimizer, **kwargs) ->\
-            Tuple[BaseModel, _LRScheduler, Optimizer]:
+
+    def on_epoch_start(
+        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
 
         if self.epoch_number == 0:
             model.mlm_mode = True
@@ -54,4 +51,3 @@ class MLMOrchestrator(BaseOrchestrator):
 
         self.epoch_number += 1
         return model, scheduler, opt
-

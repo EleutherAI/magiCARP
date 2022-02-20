@@ -1,10 +1,12 @@
+from carp.pytorch.data import get_datapipeline_names
 from carp.pytorch.model.architectures import get_architecture_names
 from carp.pytorch.model.encoders import get_encoder_names
 from carp.pytorch.training import get_orchestrator_names
-from carp.pytorch.data import get_datapipeline_names
+
+
 def print_available_configs(args):
     if args.get_architectures:
-        print("FORMAT: Architecture") 
+        print("FORMAT: Architecture")
         print("Available architectures are:")
         print("***************")
         print("\n".join(get_architecture_names()))

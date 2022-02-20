@@ -1,39 +1,40 @@
 from argparse import ArgumentParser
-from carp.clock import Clock
-from carp.configs import CARPConfig, TrainConfig
-from carp.pytorch.model.architectures import get_architecture
-from carp.pytorch.training import get_orchestrator
-from carp.util import get_scheduling_func
-from carp.pytorch.data import get_datapipeline, BaseDataPipeline
-from carp.pytorch.training import get_orchestrator, BaseOrchestrator
-from carp.pytorch.training.utils import print_available_configs
+from pathlib import Path
 
 import torch
-from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader, random_split, RandomSampler, Subset
 import wandb
-from pathlib import Path
+from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import Subset, random_split
+
+from carp.clock import Clock
+from carp.configs import CARPConfig
+from carp.pytorch.data import BaseDataPipeline, get_datapipeline
+from carp.pytorch.model.architectures import get_architecture
+from carp.pytorch.training import BaseOrchestrator, get_orchestrator
+from carp.pytorch.training.utils import print_available_configs
+from carp.util import get_scheduling_func
 
 
 def get_arguments():
     parser = ArgumentParser()
     parser.add_argument("--data_path", type=str, required=False)
-    parser.add_argument("--ckpt_path", type=str, default = "./output/", required=False)
+    parser.add_argument("--ckpt_path", type=str, default="./output/", required=False)
     parser.add_argument("--config_path", type=str, default="./base_config.yml")
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--load_checkpoint", action='store_true')
+    parser.add_argument("--load_checkpoint", action="store_true")
     parser.add_argument("--wandb_run_name", type=str)
     parser.add_argument("--seed", type=float, default=42)
     parser.add_argument("--type", type=str, default="CARP")
-    parser.add_argument("--get_architectures", action='store_true')
-    parser.add_argument("--get_encoders", action='store_true')
-    parser.add_argument("--get_datapipelines", action='store_true')
-    parser.add_argument("--get_orchestrators", action='store_true')
+    parser.add_argument("--get_architectures", action="store_true")
+    parser.add_argument("--get_encoders", action="store_true")
+    parser.add_argument("--get_datapipelines", action="store_true")
+    parser.add_argument("--get_orchestrators", action="store_true")
     return parser
 
 
-def get_model(config: CARPConfig, load_checkpoint: bool,\
-    model_type : str = "CARP", ckpt_path = None):
+def get_model(
+    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None
+):
 
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
@@ -50,15 +51,17 @@ def get_datasets(config, data_path, random_seed=None):
     size = len(dataset)
 
     seed = torch.manual_seed(random_seed)
-    if config.eval_selection == 'random':
+    if config.eval_selection == "random":
         splits = [size - config.validation_size, config.validation_size]
         return random_split(dataset, splits, generator=seed)
-    elif config.eval_selection == 'final_n':
+    elif config.eval_selection == "final_n":
         train_indices = list(range(size - config.validation_size))
         eval_indices = list(range(size - config.validation_size, size))
         return Subset(dataset, train_indices), Subset(dataset, eval_indices)
     else:
-        raise NotImplementedError('The only valid options for `eval_selection` are "random" and "final_n"')
+        raise NotImplementedError(
+            'The only valid options for `eval_selection` are "random" and "final_n"'
+        )
 
 
 def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
@@ -67,7 +70,7 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
     if save_iter:
         Path(f"./checkpoints/{iter}/").mkdir(parents=True, exist_ok=True)
         model.save(f"./checkpoints/{iter}/")
-        
+
     Path("./output/").mkdir(parents=True, exist_ok=True)
     model.save("./output/")
     torch.save(scheduler.state_dict(), "./output/schedule.pt")
@@ -75,19 +78,26 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
 
 
 # Dataset assumed to be list of pairs on memory
-def train(model,
+def train(
+    model,
     dataset: BaseDataPipeline,
     evalset: BaseDataPipeline,
-    orchestrator : BaseOrchestrator,
-    args):
+    orchestrator: BaseOrchestrator,
+    args,
+):
     # Tokenizes string batch using encoder tokenizer
     LEARNING_RATE_INIT = orchestrator.train_config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
 
-    # setup data pipeline. model is needed 
+    # setup data pipeline. model is needed
     tokenizer = orchestrator.construct_tokenizer(model.passage_encoder)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0,eps = orchestrator.train_config.opt_eps)
+    opt = torch.optim.AdamW(
+        model.parameters(),
+        lr=LEARNING_RATE_INIT,
+        weight_decay=0,
+        eps=orchestrator.train_config.opt_eps,
+    )
     scheduler = LambdaLR(opt, get_scheduling_func(orchestrator.train_config))
     scaler = torch.cuda.amp.GradScaler()
     if LOAD_CHECKPOINT:
@@ -96,8 +106,8 @@ def train(model,
                 scheduler.load_state_dict(torch.load("./output/schedule.pt"))
                 opt.load_state_dict(torch.load("./output/opt.pt"))
             else:
-                scheduler.load_state_dict(torch.load(args.ckpt_path+"schedule.pt"))
-                opt.load_state_dict(torch.load(args.ckpt_path+"opt.pt"))
+                scheduler.load_state_dict(torch.load(args.ckpt_path + "schedule.pt"))
+                opt.load_state_dict(torch.load(args.ckpt_path + "opt.pt"))
         except:
             print("Unable to load scheduler and/or optimizer. Continuing.")
     model.train()
@@ -110,8 +120,12 @@ def train(model,
 
         for passages, reviews in train_data:
             timer.hit()
-            model, scheduler, opt = orchestrator.before_train_step(model, scheduler, opt)
-            batch_outputs = model.train_step(passages, reviews, orchestrator.train_config, opt, scaler)
+            model, scheduler, opt = orchestrator.before_train_step(
+                model, scheduler, opt
+            )
+            batch_outputs = model.train_step(
+                passages, reviews, orchestrator.train_config, opt, scaler
+            )
             model, scheduler, opt = orchestrator.after_train_step(model, scheduler, opt)
 
             back_time = timer.hit()
@@ -128,7 +142,10 @@ def train(model,
                     wandb.log(batch_outputs, commit=True)
             # Checkpoint model and scheduler
             if iteration % orchestrator.train_config.checkpoint_interval == 0:
-                save_iter = iteration % (20 * orchestrator.train_config.checkpoint_interval) == 0
+                save_iter = (
+                    iteration % (20 * orchestrator.train_config.checkpoint_interval)
+                    == 0
+                )
                 model, scheduler, opt = orchestrator.before_save(model, scheduler, opt)
                 save_checkpoint(model, scheduler, opt, iteration, save_iter)
                 model, scheduler, opt = orchestrator.after_save(model, scheduler, opt)
@@ -136,15 +153,18 @@ def train(model,
             if iteration % orchestrator.train_config.validate_interval == 0:
                 print("VALIDATING...")
                 model.eval()
-                model, scheduler, opt = orchestrator.before_validate_step(model, scheduler, opt)
+                model, scheduler, opt = orchestrator.before_validate_step(
+                    model, scheduler, opt
+                )
                 eval_data = orchestrator.construct_dataloader(evalset, tokenizer)
 
                 eval_out = model.eval_step(eval_data)
-                model, scheduler, opt = orchestrator.after_validate_step(model, scheduler, opt)
-                
+                model, scheduler, opt = orchestrator.after_validate_step(
+                    model, scheduler, opt
+                )
 
-                if eval_out['Loss/Validation'] < best_val:
-                    best_val = eval_out['Loss/Validation']
+                if eval_out["Loss/Validation"] < best_val:
+                    best_val = eval_out["Loss/Validation"]
                     print("NEW BEST VALIDATION. SAVING.")
                     print(f"Validation Avg Loss: {eval_out['Loss/Validation']}")
                     print(f"Validation Avg Accuracy: {eval_out['Acc/Validation']}")
@@ -156,7 +176,6 @@ def train(model,
             iteration += 1
             scheduler.step()
             model.clamp()
-        
 
 
 def param_count(model):
@@ -180,7 +199,7 @@ if __name__ == "__main__":
                 resume=False,
                 config=config.to_dict(),
             )
-            wandb.config.update({'seed': args.seed})
+            wandb.config.update({"seed": args.seed})
             wandb.watch(model)
         dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
         train(model, dataset, evalset, orchestrator, args)

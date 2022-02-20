@@ -1,11 +1,14 @@
 import csv
-from datasets import load_from_disk
 from typing import List, Tuple
+
+from datasets import load_from_disk
 
 # import util
 
 
-def get_dataset(val_size: int, use_bucket: bool = False, dupe_protection: bool = True) -> Tuple[List[str], List[str]]:
+def get_dataset(
+    val_size: int, use_bucket: bool = False, dupe_protection: bool = True
+) -> Tuple[List[str], List[str]]:
     if use_bucket:
         # dataset = util.load_dataset_from_bucket()
         # TODO: Figure out where util.load_dataset_from_bucket is defined
@@ -50,16 +53,15 @@ def get_toy_dataset(val_size: int):
 
 
 def write_dataset_csv(data, filepath):
-    with open(filepath, mode='w') as csvfile:
+    with open(filepath, mode="w") as csvfile:
         writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
         writer.writerows(data)
 
 
 if __name__ == "__main__":
-    train_set, val_set = get_dataset(100,dupe_protection=False)
+    train_set, val_set = get_dataset(100, dupe_protection=False)
     train_set = list(map(lambda x: list(x), train_set))
     val_set = list(map(lambda x: ["", list(x)[1]], val_set))
 
-    write_dataset_csv(train_set, 'train.csv')
-    write_dataset_csv(val_set, 'val_crits.csv')
-
+    write_dataset_csv(train_set, "train.csv")
+    write_dataset_csv(val_set, "val_crits.csv")

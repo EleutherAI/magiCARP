@@ -1,36 +1,35 @@
 # import all old model formats here
-from carp.pytorch.legacy.carp_v1 import *
-
-# import all new model formats here
-from carp.pytorch.model.architectures import *
-from carp.pytorch.model.encoders.pool_encoder import *
-
-# import decorator
-from carp.pytorch.checkpointing import register_converter, Converter
-
 # import config files
 from carp.configs import *
-
-from carp.pytorch.model.encoders import get_encoder, get_encoder_names
+# import decorator
+from carp.pytorch.checkpointing import Converter, register_converter
+from carp.pytorch.legacy.carp_v1 import *
+# import all new model formats here
+from carp.pytorch.model.architectures import *
+from carp.pytorch.model.encoders import get_encoder_names
+from carp.pytorch.model.encoders.pool_encoder import *
 
 encoder_names = get_encoder_names()
 
+
 @register_converter("SumTextEncoder V1", "V2")
 class ConvertSumTextEncoderV1ToV2(Converter):
-    def convert(self, path_orig :str, path_dest : str, **kwargs):
+    def convert(self, path_orig: str, path_dest: str, **kwargs):
         v1_model = ContrastiveModelV1(TextEncoderV1(), TextEncoderV1())
         v1_model.load_state_dict(torch.load(path_orig))
 
         # initialize the model on cpu using roughly the same parameters as the v1 model
-        v2_config = ModelConfig(latent_dim=2048,
+        v2_config = ModelConfig(
+            latent_dim=2048,
             proj_dropout=0.1,
             linear_projection=True,
             model_path="roberta-large",
             model_arch="roberta",
             encoder_type="SumTextEncoder",
-            momentum=0.,
+            momentum=0.0,
             device="cpu",
-            grad_clip=1.0)
+            grad_clip=1.0,
+        )
 
         v2_model = CARP(v2_config)
 
