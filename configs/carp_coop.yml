@@ -31,4 +31,4 @@ train_job:
   hard_dupe_protection: false
   data_pipeline: "ScarecrowDataPipeline"
   orchestrator: "BaseOrchestrator"
-  
+  gradient_checkpointing: true

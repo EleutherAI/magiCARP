@@ -231,14 +231,12 @@ class CARPCoOp(BaseModel):
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
-    def train_step(
+    def forward(
         self,
         passages: BatchElement,
         reviews: ScarecrowTargetElement,
         config: TrainConfig,
-        opt: torch.optim.Optimizer,
-        scaler: torch.cuda.amp.GradScaler,
-    ) -> Dict[str, TensorType[()]]:
+    ):
         microbatch_inds = generate_indices(
             passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
@@ -260,27 +258,76 @@ class CARPCoOp(BaseModel):
             torch.cat(pass_encs), rev_encs, torch.cat(rev_labels)
         )
 
-        # does gradient accumulation
-        self.zero_grad(opt)
+        return {
+            "pass_mbs": pass_mbs,
+            "pass_encs": pass_encs,
+            "rev_encs": rev_encs,
+            "forward_acc": forward_acc,
+        }
+
+
+class CARPCoOpTrainer(BaseTrainer):
+    def train_deepspeed_step(
+        self,
+        passages: BatchElement,
+        reviews: ScarecrowTargetElement,
+        config: TrainConfig,
+    ) -> Dict[str, TensorType[()]]:
+        forward_output = self.model(passages, reviews, config)
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
-        for index, passage in enumerate(pass_mbs):
-            pass_tmp = pass_encs.copy()
+        for index, passage in enumerate(forward_output["pass_mbs"]):
+            pass_tmp = forward_output["pass_encs"].copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.encode_passages(passage).hidden
-                loss = self.CoOp_loss(
-                    torch.cat(pass_tmp), rev_encs, torch.cat(rev_labels)
-                )
+                pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
-            scaler.scale(loss).backward()
+            loss = self.model.module.CoOp_loss(
+                torch.cat(pass_tmp),
+                forward_output["rev_encs"],
+                torch.cat(forward_output["rev_labels"]),
+            )
 
-        # Clipping
-        if self.config.grad_clip != -1:
-            scaler.unscale_(opt)
-            torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
+            self.model.backward(loss)
 
-        self.step(scaler, opt)
+        self.deepspeed_step()
+
         return {
             "Loss/Train": loss,
-            "Acc/Forward": forward_acc,
+            "Acc/Forward": forward_output["forward_acc"],
+        }
+
+    def train_torch_step(
+        self,
+        passages: BatchElement,
+        reviews: ScarecrowTargetElement,
+        config: TrainConfig,
+    ) -> Dict[str, TensorType[()]]:
+        forward_output = self.model(passages, reviews, config)
+
+        # does gradient accumulation
+        self.zero_grad(self.opt)
+
+        # Encode passages in microbatches (with grad) and compute CoOp loss
+        for index, passage in enumerate(forward_output["pass_mbs"]):
+            pass_tmp = forward_output["pass_encs"].copy()
+            with torch.cuda.amp.autocast():
+                pass_tmp[index] = self.model.encode_passages(passage).hidden
+                loss = self.model.CoOp_loss(
+                    torch.cat(pass_tmp),
+                    forward_output["rev_encs"],
+                    torch.cat(forward_output["rev_labels"]),
+                )
+
+            self.scaler.scale(loss).backward()
+
+        # Clipping
+        if self.model.config.grad_clip != -1:
+            self.scaler.unscale_(self.opt)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
+
+        self.torch_step()
+
+        return {
+            "Loss/Train": loss,
+            "Acc/Forward": forward_output["forward_acc"],
         }

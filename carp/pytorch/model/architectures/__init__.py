@@ -96,7 +96,8 @@ class BaseModel(nn.Module):
             component : nn.module
         """
         try:
-            return torch.load(path + component_name)
+            # kevin) cpu load -> gpu upload is better.
+            return torch.load(path + component_name, map_location="cpu")
         except:
             print("Unable to load " + component_name + ". Continuing.")
 
@@ -222,28 +223,54 @@ class BaseModel(nn.Module):
             rev_encs = list(map(lambda x: x.hidden, rev_encs))
         return pass_encs, rev_encs
 
-    def train_step(
+    def forward(
         self,
         passages: BatchElement,
         reviews: BatchElement,
         config: TrainConfig,
-        opt: torch.optim.Optimizer,
-        scaler: torch.cuda.amp.GradScaler,
     ) -> Dict[str, TensorType[()]]:
         raise NotImplementedError("Must be overridden.")
 
+
+class BaseTrainer(object):
+    def __init__(self, model, opt, scaler=None, use_deepspeed=False):
+        self.model = model
+        self.opt = opt
+        self.scaler = scaler
+        self.use_deepspeed = use_deepspeed
+
+    def train_step(self, *args, **kwargs):
+        if self.use_deepspeed:
+            return self.train_deepspeed_step(*args, **kwargs)
+        else:
+            return self.train_torch_step(*args, **kwargs)
+
+    def train_deepspeed_step(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def train_torch_step(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def torch_step(self):
+        if self.model.accum_step % self.model.config.grad_accum == 0:
+            self.scaler.step(self.opt)
+            self.scaler.update()
+            self.model.accum_step = 0
+        else:
+            self.model.accum_step += 1
+
+    def deepspeed_step(self):
+        if self.model.module.accum_step % self.model.module.config.grad_accum == 0:
+            self.model.step()
+            self.model.module.accum_step = 0
+        else:
+            self.model.module.accum_step += 1
+
     # used to account for gradient accumulations
     def zero_grad(self, opt: torch.optim.Optimizer):
-        if self.accum_step % self.config.grad_accum == 0:
-            opt.zero_grad()
-
-    def step(self, scaler: torch.cuda.amp.GradScaler, opt: torch.optim.Optimizer):
-        if self.accum_step % self.config.grad_accum == 0:
-            scaler.step(opt)
-            scaler.update()
-            self.accum_step = 0
-        else:
-            self.accum_step += 1
+        if not self.use_deepspeed:
+            if self.model.accum_step % self.model.config.grad_accum == 0:
+                opt.zero_grad()
 
     def eval_step(self, dataset):
         passages = []
@@ -257,9 +284,24 @@ class BaseModel(nn.Module):
         reviews = chunkBatchElement(reviews[0], 8)
 
         with torch.no_grad():
-            pass_emb, rev_emb = self.calculate_embeddings(passages, reviews)
-            val_loss = self.contrastive_loss(torch.cat(pass_emb), torch.cat(rev_emb))
-            val_acc = self.compute_accuracy(torch.cat(pass_emb), torch.cat(rev_emb))
+            if self.use_deepspeed:
+                pass_emb, rev_emb = self.model.module.calculate_embeddings(
+                    passages, reviews
+                )
+                val_loss = self.model.module.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.module.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+            else:
+                pass_emb, rev_emb = self.model.calculate_embeddings(passages, reviews)
+                val_loss = self.model.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 

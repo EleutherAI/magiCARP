@@ -5,6 +5,8 @@ from carp.pytorch.model.architectures import *
 from carp.pytorch.model.encoders import get_encoder
 from carp.util import generate_indices
 
+# TODO: DEEPSPEED SUPPORT (kevin)
+
 patch_typeguard()
 
 

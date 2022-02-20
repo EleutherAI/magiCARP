@@ -8,6 +8,7 @@ from carp.util import generate_indices
 # CARP MLM differs from normal CARP since the first epoch will solely use an MLM objective to improve data efficiency.
 # TODO: The learning rate scheduler needs to account for this, so we need a way to register custom LR schedulers.
 # TODO: We need to make sure it saves a CARP MLM checkpoint after the first epoch so that we can convert it to CARP Cloob or CARP momentum
+# TODO: DEEPSPEED SUPPORT (kevin)
 
 patch_typeguard()
 

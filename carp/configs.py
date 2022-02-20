@@ -50,6 +50,7 @@ class TrainConfig:
     use_half: bool = False
     use_bucket: bool = False
     opt_eps: float = 1e-4  # Epsilon for optimizer
+    gradient_checkpointing: bool = False
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

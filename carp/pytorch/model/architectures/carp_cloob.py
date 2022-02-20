@@ -104,14 +104,12 @@ class CARPCloob(BaseModel):
 
         return (loss_img + loss_txt).sum()
 
-    def train_step(
+    def forward(
         self,
         passages: BatchElement,
         reviews: BatchElement,
         config: TrainConfig,
-        opt: torch.optim.Optimizer,
-        scaler: torch.cuda.amp.GradScaler,
-    ) -> Dict[str, TensorType[()]]:
+    ):
         microbatch_inds = generate_indices(
             passages[0].shape[0], config.microbatch_size, shuffle=False
         )
@@ -129,39 +127,108 @@ class CARPCloob(BaseModel):
         # compute accuracy
         forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
 
-        opt.zero_grad()
+        return {
+            "pass_mbs": pass_mbs,
+            "pass_encs": pass_encs,
+            "rev_mbs": rev_mbs,
+            "rev_encs": rev_encs,
+            "forward_acc": forward_acc,
+        }
+
+
+class CARPCloobTrainer(BaseTrainer):
+    def train_deepspeed_step(
+        self,
+        passages: BatchElement,
+        reviews: BatchElement,
+        config: TrainConfig,
+    ):
+        forward_output = self.model(passages, reviews, config)
+
         # Encode passages in microbatches (with grad)
-        for index, passage in enumerate(pass_mbs):
+        for index, passage in enumerate(forward_output["pass_mbs"]):
             passage, mask = passage
-            pass_tmp = pass_encs.copy()
+            pass_tmp = forward_output["pass_encs"].copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.encode_passages(
-                    passage.to(self.device), mask.to(self.device)
+                pass_tmp[index] = self.model.module.encode_passages(
+                    passage.to(self.model.module.device),
+                    mask.to(self.model.module.device),
                 )
-                loss = self.cloob(torch.cat(pass_tmp), torch.cat(rev_encs))
+            loss = self.model.module.cloob(
+                torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
+            )
+            self.model.backward(loss)
 
-            scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
-        for index, review in enumerate(rev_mbs):
+        for index, review in enumerate(forward_output["rev_mbs"]):
             review, mask = review
-            rev_tmp = rev_encs.copy()  # no_grad
+            rev_tmp = forward_output["rev_encs"].copy()  # no_grad
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.encode_reviews(
-                    review.to(self.device), mask.to(self.device)
+                rev_tmp[index] = self.model.module.encode_reviews(
+                    review.to(self.model.module.device),
+                    mask.to(self.model.module.device),
                 )  # grad _just_ at positions in `index`
-                loss = self.cloob(torch.cat(pass_encs), torch.cat(rev_tmp))
+            loss = self.model.module.cloob(
+                torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
+            )
+            self.model.backward(loss)
 
-            scaler.scale(loss).backward()
-        # Clipping
-        if self.config.grad_clip != -1:
-            scaler.unscale_(opt)
-            torch.nn.utils.clip_grad_norm_(self.parameters(), config.grad_clip)
+        self.model.step()
+        # Kevin: Why not accumulation?
+        # it's different with carp.py
 
-        scaler.step(opt)
-        scaler.update()
         return {
             "Loss/Train": loss,
-            "Acc/Forward": forward_acc,
-            "Model/logit_scale": self.logit_scale.sum(),
-            "Model/hopfield_scale": self.hopfield_scale.sum(),
+            "Acc/Forward": forward_output["forward_acc"],
+            "Model/logit_scale": self.model.module.logit_scale.sum(),
+            "Model/hopfield_scale": self.model.module.hopfield_scale.sum(),
+        }
+
+    def train_torch_step(
+        self,
+        passages: BatchElement,
+        reviews: BatchElement,
+        config: TrainConfig,
+    ) -> Dict[str, TensorType[()]]:
+        forward_output = self.model(passages, reviews, config)
+
+        self.opt.zero_grad()
+        # Encode passages in microbatches (with grad)
+        for index, passage in enumerate(forward_output["pass_mbs"]):
+            passage, mask = passage
+            pass_tmp = forward_output["pass_encs"].copy()
+            with torch.cuda.amp.autocast():
+                pass_tmp[index] = self.model.encode_passages(
+                    passage.to(self.model.device), mask.to(self.model.device)
+                )
+                loss = self.model.cloob(
+                    torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
+                )
+
+            self.scaler.scale(loss).backward()
+        # Encode reviews in microbatches (with grad)
+        for index, review in enumerate(forward_output["rev_mbs"]):
+            review, mask = review
+            rev_tmp = forward_output["rev_encs"].copy()  # no_grad
+            with torch.cuda.amp.autocast():
+                rev_tmp[index] = self.model.encode_reviews(
+                    review.to(self.model.device), mask.to(self.model.device)
+                )  # grad _just_ at positions in `index`
+                loss = self.model.cloob(
+                    torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
+                )
+
+            self.scaler.scale(loss).backward()
+        # Clipping
+        if self.model.config.grad_clip != -1:
+            self.scaler.unscale_(self.opt)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
+
+        self.scaler.step(self.opt)
+        self.scaler.update()
+        return {
+            "Loss/Train": loss,
+            "Acc/Forward": forward_output["forward_acc"],
+            "Model/logit_scale": self.model.logit_scale.sum(),
+            "Model/hopfield_scale": self.model.hopfield_scale.sum(),
         }

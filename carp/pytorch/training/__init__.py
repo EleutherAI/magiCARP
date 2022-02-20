@@ -4,6 +4,7 @@ import sys
 from abc import abstractmethod
 from typing import Callable, Dict, Tuple
 
+from catalyst.data import DistributedSamplerWrapper
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
@@ -97,9 +98,16 @@ class BaseOrchestrator:
         return model, scheduler, opt
 
     def construct_dataloader(
-        self, dataset: BaseDataPipeline, tokenizer: Callable
+        self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
     ) -> DataLoader:
         sampler = RandomSampler(dataset)
+
+        if multi_gpus is True:
+            sampler = DistributedSamplerWrapper(
+                sampler=sampler,
+                shuffle=False,
+            )
+
         return DataLoader(
             dataset,
             batch_size=self.train_config.batch_size,
