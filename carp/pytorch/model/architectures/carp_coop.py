@@ -7,6 +7,7 @@ from carp.configs import ModelConfig
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowTargetElement
 from carp.pytorch.model.architectures import *
 from carp.pytorch.model.encoders import BaseEncoder, BaseEncoderOutput
+from carp.pytorch.training import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -265,7 +266,7 @@ class CARPCoOp(BaseModel):
             "forward_acc": forward_acc,
         }
 
-
+@register_trainer
 class CARPCoOpTrainer(BaseTrainer):
     def train_deepspeed_step(
         self,

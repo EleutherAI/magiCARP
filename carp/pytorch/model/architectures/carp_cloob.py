@@ -2,6 +2,7 @@ from typing import List
 
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
+from carp.pytorch.training import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 
@@ -111,14 +112,15 @@ class CARPCloob(BaseModel):
         config: TrainConfig,
     ):
         microbatch_inds = generate_indices(
-            passages[0].shape[0], config.microbatch_size, shuffle=False
+            passages.input_ids.shape[0], config.microbatch_size, shuffle=False
         )
         # Split tokens and masks into these microbatches
-        pass_mbs: List[Tuple[BatchElement]] = [
-            (passages[0][i], passages[1][i]) for i in microbatch_inds
+        pass_mbs: List[BatchElement] = [
+            BatchElement(passages.input_ids[i], passages.mask[i])
+            for i in microbatch_inds
         ]
-        rev_mbs: List[Tuple[BatchElement]] = [
-            (reviews[0][i], reviews[1][i]) for i in microbatch_inds
+        rev_mbs: List[BatchElement] = [
+            BatchElement(reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
         ]
 
         # Initially get all encodings without grad
@@ -136,6 +138,7 @@ class CARPCloob(BaseModel):
         }
 
 
+@register_trainer
 class CARPCloobTrainer(BaseTrainer):
     def train_deepspeed_step(
         self,
@@ -147,13 +150,10 @@ class CARPCloobTrainer(BaseTrainer):
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
-            passage, mask = passage
             pass_tmp = forward_output["pass_encs"].copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.model.module.encode_passages(
-                    passage.to(self.model.module.device),
-                    mask.to(self.model.module.device),
-                )
+                pass_tmp[index] = self.model.module.encode_passages(passage).hidden
+
             loss = self.model.module.cloob(
                 torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
             )
@@ -161,13 +161,10 @@ class CARPCloobTrainer(BaseTrainer):
 
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
-            review, mask = review
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.model.module.encode_reviews(
-                    review.to(self.model.module.device),
-                    mask.to(self.model.module.device),
-                )  # grad _just_ at positions in `index`
+                rev_tmp[index] = self.model.module.encode_reviews(review).hidden
+                # grad _just_ at positions in `index`
             loss = self.model.module.cloob(
                 torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
             )
@@ -195,12 +192,10 @@ class CARPCloobTrainer(BaseTrainer):
         self.opt.zero_grad()
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
-            passage, mask = passage
             pass_tmp = forward_output["pass_encs"].copy()
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.model.encode_passages(
-                    passage.to(self.model.device), mask.to(self.model.device)
-                )
+                pass_tmp[index] = self.model.encode_passages(passage).hidden
+
                 loss = self.model.cloob(
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
                 )
@@ -208,12 +203,10 @@ class CARPCloobTrainer(BaseTrainer):
             self.scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
-            review, mask = review
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.model.encode_reviews(
-                    review.to(self.model.device), mask.to(self.model.device)
-                )  # grad _just_ at positions in `index`
+                rev_tmp[index] = self.model.encode_reviews(review).hidden
+                # grad _just_ at positions in `index`
                 loss = self.model.cloob(
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
                 )

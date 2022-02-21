@@ -18,7 +18,7 @@ from carp.pytorch.scalability_utils import (
     parse_deepspeed_config,
     print_rank_0,
 )
-from carp.pytorch.training import BaseOrchestrator, get_orchestrator
+from carp.pytorch.training import get_trainer
 from carp.pytorch.training.utils import print_available_configs
 from carp.util import get_scheduling_func
 
@@ -36,7 +36,7 @@ def get_arguments():
     parser.add_argument("--get_architectures", action="store_true")
     parser.add_argument("--get_encoders", action="store_true")
     parser.add_argument("--get_datapipelines", action="store_true")
-    parser.add_argument("--get_orchestrators", action="store_true")
+    parser.add_argument("--get_trainers", action="store_true")
     parser.add_argument("--deepspeed_config", default=None)
     return parser
 
@@ -111,19 +111,19 @@ def train(
     model,
     dataset: BaseDataPipeline,
     evalset: BaseDataPipeline,
-    orchestrator: BaseOrchestrator,
+    trainer,
     args,
     multi_gpus: bool = False,
 ):
     # Tokenizes string batch using encoder tokenizer
     USE_DEEPSPEED = args.deepspeed_config is not None
-    LEARNING_RATE_INIT = orchestrator.train_config.learning_rate_init
+    LEARNING_RATE_INIT = trainer.train_config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
 
     # setup data pipeline. model is needed
-    tokenizer = orchestrator.construct_tokenizer(model.passage_encoder)
+    tokenizer = trainer.construct_tokenizer(model.passage_encoder)
 
-    if args.deepspeed_config is not None:
+    if USE_DEEPSPEED:
         model, opt, _, _ = deepspeed.initialize(
             model=model,
             model_parameters=model.parameters(),
@@ -131,7 +131,7 @@ def train(
             mpu=model.mpu if hasattr(model, "mpu") else None,
         )
         scheduler = LambdaLR(
-            opt.optimizer, get_scheduling_func(orchestrator.train_config)
+            opt.optimizer, get_scheduling_func(trainer.train_config)
         )
 
     else:
@@ -139,15 +139,13 @@ def train(
             model.parameters(),
             lr=LEARNING_RATE_INIT,
             weight_decay=0,
-            eps=orchestrator.train_config.opt_eps,
+            eps=trainer.train_config.opt_eps,
         )
-        scheduler = LambdaLR(opt, get_scheduling_func(orchestrator.train_config))
+        scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))
 
     scaler = torch.cuda.amp.GradScaler()
     save_fn = model.module.save if USE_DEEPSPEED else model.save
-    trainer = get_architecture(args.type + "Trainer")(
-        model, opt, scaler, use_deepspeed=USE_DEEPSPEED
-    )
+    trainer.set_train_params(model, opt, scaler, USE_DEEPSPEED)
 
     if LOAD_CHECKPOINT:
         try:
@@ -170,19 +168,19 @@ def train(
     timer = Clock()
     iteration, best_val = 0, 100
 
-    for epoch in range(orchestrator.train_config.epochs):
-        model, scheduler, opt = orchestrator.on_epoch_start(model, scheduler, opt)
-        train_data = orchestrator.construct_dataloader(dataset, tokenizer, multi_gpus)
+    for epoch in range(trainer.train_config.epochs):
+        model, scheduler, opt = trainer.on_epoch_start(model, scheduler, opt)
+        train_data = trainer.construct_dataloader(dataset, tokenizer, multi_gpus)
 
         for passages, reviews in train_data:
             timer.hit()
-            model, scheduler, opt = orchestrator.before_train_step(
+            model, scheduler, opt = trainer.before_train_step(
                 model, scheduler, opt
             )
             batch_outputs = trainer.train_step(
-                passages, reviews, orchestrator.train_config
+                passages, reviews, trainer.train_config
             )
-            model, scheduler, opt = orchestrator.after_train_step(model, scheduler, opt)
+            model, scheduler, opt = trainer.after_train_step(model, scheduler, opt)
 
             back_time = timer.hit()
             back_time = (
@@ -195,38 +193,38 @@ def train(
             timer.hit()
             batch_outputs["Time/Batch"] = back_time
 
-            if orchestrator.train_config.do_log:
+            if trainer.train_config.do_log:
                 fn_rank_0(wandb.log, batch_outputs, commit=False)
-            if iteration % orchestrator.train_config.log_interval == 0:
+            if iteration % trainer.train_config.log_interval == 0:
                 print_rank_0(
-                    f'EPOCH [{epoch}/{orchestrator.train_config.epochs}]\nBatch Loss: {batch_outputs["Loss/Train"].item()}'
+                    f'EPOCH [{epoch}/{trainer.train_config.epochs}]\nBatch Loss: {batch_outputs["Loss/Train"].item()}'
                 )
-                if orchestrator.train_config.do_log:
+                if trainer.train_config.do_log:
                     fn_rank_0(wandb.log, batch_outputs, commit=True)
             # Checkpoint model and scheduler
-            if iteration % orchestrator.train_config.checkpoint_interval == 0:
+            if iteration % trainer.train_config.checkpoint_interval == 0:
                 save_iter = (
-                    iteration % (20 * orchestrator.train_config.checkpoint_interval)
+                    iteration % (20 * trainer.train_config.checkpoint_interval)
                     == 0
                 )
-                model, scheduler, opt = orchestrator.before_save(model, scheduler, opt)
+                model, scheduler, opt = trainer.before_save(model, scheduler, opt)
                 fn_rank_0(
                     save_checkpoint, save_fn, scheduler, opt, iteration, save_iter
                 )
-                model, scheduler, opt = orchestrator.after_save(model, scheduler, opt)
+                model, scheduler, opt = trainer.after_save(model, scheduler, opt)
             # Run on eval set
-            if iteration % orchestrator.train_config.validate_interval == 0:
+            if iteration % trainer.train_config.validate_interval == 0:
                 print_rank_0("VALIDATING...")
                 model.eval()
-                model, scheduler, opt = orchestrator.before_validate_step(
+                model, scheduler, opt = trainer.before_validate_step(
                     model, scheduler, opt
                 )
-                eval_data = orchestrator.construct_dataloader(
+                eval_data = trainer.construct_dataloader(
                     evalset, tokenizer, multi_gpus
                 )
 
                 eval_out = trainer.eval_step(eval_data)
-                model, scheduler, opt = orchestrator.after_validate_step(
+                model, scheduler, opt = trainer.after_validate_step(
                     model, scheduler, opt
                 )
 
@@ -239,7 +237,7 @@ def train(
                     )
                     Path(f"./best/{iteration}/").mkdir(parents=True, exist_ok=True)
                     fn_rank_0(save_fn, f"./best/{iteration}/")
-                if orchestrator.train_config.do_log:
+                if trainer.train_config.do_log:
                     fn_rank_0(wandb.log, eval_out)
                 model.train()
 
@@ -265,13 +263,13 @@ if __name__ == "__main__":
     if not print_available_configs(args):
         config = CARPConfig.load_yaml(args.config_path)
         train_config = config.train_job
-        orchestrator = get_orchestrator(train_config.orchestrator)(train_config)
+        trainer = get_trainer(train_config.trainer)(train_config)
 
         sanity_check(args, config)
         args.deepspeed_config = parse_deepspeed_config(
             args,
-            orchestrator.train_config,
-            lr=orchestrator.train_config.learning_rate_init,
+            trainer.train_config,
+            lr=trainer.train_config.learning_rate_init,
             weight_decay=0,
         )
 
@@ -300,4 +298,4 @@ if __name__ == "__main__":
             # wandb.config.update({"seed": args.seed})
             fn_rank_0(wandb.watch, model)
         dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
-        train(model, dataset, evalset, orchestrator, args, multi_gpus)
+        train(model, dataset, evalset, trainer, args, multi_gpus)

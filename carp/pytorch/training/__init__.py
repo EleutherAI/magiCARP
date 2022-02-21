@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import sys
 from abc import abstractmethod
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Tuple, Any
 
 from catalyst.data import DistributedSamplerWrapper
+import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
@@ -12,14 +13,14 @@ from torch.utils.data.sampler import RandomSampler
 
 from carp.configs import TrainConfig
 from carp.pytorch.data import BaseDataPipeline, get_datapipeline
-from carp.pytorch.model.architectures import BaseModel
+from carp.pytorch.data.utils.data_util import chunkBatchElement
 from carp.pytorch.model.encoders import BaseEncoder
 
 # specifies a dictionary of architectures
-_ORCHESTRATORS: Dict[str, any] = {}  # registry
+_TRAINERS: Dict[str, any] = {}  # registry
 
 
-def register_orchestrator(name):
+def register_trainer(name):
     """Decorator used register a CARP architecture
 
     Args:
@@ -27,7 +28,7 @@ def register_orchestrator(name):
     """
 
     def register_class(cls, name):
-        _ORCHESTRATORS[name] = cls
+        _TRAINERS[name] = cls
         setattr(sys.modules[__name__], name, cls)
         return cls
 
@@ -47,59 +48,159 @@ def register_orchestrator(name):
 # or for early stopping in hyper parameter sweeps
 
 # eventually orchestrator will interface with ray for distributed systems
-@register_orchestrator
-class BaseOrchestrator:
+class BaseTrainer(object):
     def __init__(self, train_config: TrainConfig):
         self.train_config = train_config
         self.force_break = False
+
+    def set_train_params(self, model, opt, scaler, use_deepspeed=False):
+        """
+        Called after optimizer and model are initialized. Not to be overridden!
+        Args:
+            model: Model we are training
+            optimizer: Optimizer for corresponding model
+            scaler: AMP grad scaler
+            use_deespeed: Whether or not the trainer should use deepspeed
+        """
+        self.model = model
+        self.opt = opt
+        self.scaler = scaler
+        self.use_deepspeed=use_deepspeed
+
+    def train_step(self, *args, **kwargs):
+        if self.use_deepspeed:
+            return self.train_deepspeed_step(*args, **kwargs)
+        else:
+            return self.train_torch_step(*args, **kwargs)
+
+    def train_deepspeed_step(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def train_torch_step(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def torch_step(self):
+        """
+        Executes a single step using the pytorch optimizer.
+        """
+        if self.model.accum_step % self.model.config.grad_accum == 0:
+            self.scaler.step(self.opt)
+            self.scaler.update()
+            self.model.accum_step = 0
+        else:
+            self.model.accum_step += 1
+
+    def deepspeed_step(self):
+        """
+        Executes a single step utilizing the deepspeed optimizer.
+        """
+        if self.model.module.accum_step % self.model.module.config.grad_accum == 0:
+            self.model.step()
+            self.model.module.accum_step = 0
+        else:
+            self.model.module.accum_step += 1
+
+    def zero_grad(self, opt: torch.optim.Optimizer):
+        """
+        Used to account for gradient accumulations. Accounts for deepspeed accumulation being different.
+        Args:
+            opt: Torch optimizer that we will zero grad if needed
+
+        """
+        if not self.use_deepspeed:
+            if self.model.accum_step % self.model.config.grad_accum == 0:
+                opt.zero_grad()
+
+    def eval_step(self, dataset):
+        """
+        Runs a single evaluation step on the model.
+        Args:
+            dataset: the validation dataset
+        Returns:
+            dict: Dictionary of validation loss and validation accuracy
+        """
+        passages = []
+        reviews = []
+        for p, r in dataset:
+            passages.append(p)
+            reviews.append(r)
+
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        reviews = chunkBatchElement(reviews[0], 8)
+
+        with torch.no_grad():
+            if self.use_deepspeed:
+                pass_emb, rev_emb = self.model.module.calculate_embeddings(
+                    passages, reviews
+                )
+                val_loss = self.model.module.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.module.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+            else:
+                pass_emb, rev_emb = self.model.calculate_embeddings(passages, reviews)
+                val_loss = self.model.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+
+        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
+
 
     # if the child class does not override a trigger, just ignore it
     # TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though
     @abstractmethod
     def before_validate_step(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def after_validate_step(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def before_train_step(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def after_train_step(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def before_save(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def after_save(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     @abstractmethod
     def on_epoch_start(
-        self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[BaseModel, _LRScheduler, Optimizer]:
+        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
+    ) -> Tuple[Any, _LRScheduler, Optimizer]:
         return model, scheduler, opt
 
     def construct_dataloader(
         self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
     ) -> DataLoader:
+        """
+        """
         sampler = RandomSampler(dataset)
 
         if multi_gpus is True:
@@ -128,12 +229,18 @@ class BaseOrchestrator:
         return tokenizer(passage_encoder)
 
 
-from carp.pytorch.training.mlm_orchestrator import MLMOrchestrator
+from carp.pytorch.model.architectures.carp import CARPTrainer
+from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
+from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
+#from carp.pytorch.model.architectures.carp_mlm import CARPMLM
+#from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
+from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoderTrainer
 
 
-def get_orchestrator(name):
-    return _ORCHESTRATORS[name.lower()]
+
+def get_trainer(name):
+    return _TRAINERS[name.lower()]
 
 
-def get_orchestrator_names():
-    return _ORCHESTRATORS.keys()
+def get_trainer_names():
+    return _TRAINERS.keys()

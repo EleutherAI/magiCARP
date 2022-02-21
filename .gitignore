@@ -3,6 +3,7 @@
 *.rar
 *.txt
 *.swp
+*.csv
 .vscode/
 clip/wandb
 .ipynb_checkpoints/

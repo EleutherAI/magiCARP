@@ -39,7 +39,7 @@ class TrainConfig:
     validate_interval: int
     eval_selection: str
     data_pipeline: str = "BaseDataPipeline"
-    orchestrator: str = "BaseOrchestrator"
+    trainer: str = "CARPTrainer"
     # Dataset sometimes contains short reviews like "lol"
     # These are harmful during training because if a batch contains more than one
     # then the duplicates will create exploding gradients through CE loss
@@ -51,7 +51,7 @@ class TrainConfig:
     use_bucket: bool = False
     opt_eps: float = 1e-4  # Epsilon for optimizer
     gradient_checkpointing: bool = False
-
+    
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
         return cls(**config)

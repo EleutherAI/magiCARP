@@ -30,5 +30,5 @@ train_job:
   dupe_protection: true
   hard_dupe_protection: false
   data_pipeline: "ScarecrowDataPipeline"
-  orchestrator: "BaseOrchestrator"
+  trainer: "CARPCoOpTrainer"
   gradient_checkpointing: true

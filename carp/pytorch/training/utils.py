@@ -2,7 +2,7 @@ from carp.pytorch.data import get_datapipeline_names
 from carp.pytorch.model.architectures import get_architecture_names
 from carp.pytorch.model.encoders import get_encoder_names
 from carp.pytorch.scalability_utils import print_rank_0
-from carp.pytorch.training import get_orchestrator_names
+from carp.pytorch.training import get_trainer_names
 
 
 def print_available_configs(args):
@@ -21,11 +21,11 @@ def print_available_configs(args):
         print_rank_0("Available data pipelines are:")
         print_rank_0("***************")
         print_rank_0("\n".join(get_datapipeline_names()))
-    elif args.get_orchestrators:
-        print_rank_0("FORMAT: Orchestrator")
-        print_rank_0("Available orchestrators are:")
+    elif args.get_trainers:
+        print_rank_0("FORMAT: Trainer")
+        print_rank_0("Available trainers are:")
         print_rank_0("***************")
-        print_rank_0("\n".join(get_orchestrator_names()))
+        print_rank_0("\n".join(get_trainer_names()))
     else:
         return False
     return True

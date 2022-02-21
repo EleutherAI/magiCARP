@@ -231,81 +231,6 @@ class BaseModel(nn.Module):
     ) -> Dict[str, TensorType[()]]:
         raise NotImplementedError("Must be overridden.")
 
-
-class BaseTrainer(object):
-    def __init__(self, model, opt, scaler=None, use_deepspeed=False):
-        self.model = model
-        self.opt = opt
-        self.scaler = scaler
-        self.use_deepspeed = use_deepspeed
-
-    def train_step(self, *args, **kwargs):
-        if self.use_deepspeed:
-            return self.train_deepspeed_step(*args, **kwargs)
-        else:
-            return self.train_torch_step(*args, **kwargs)
-
-    def train_deepspeed_step(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def train_torch_step(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def torch_step(self):
-        if self.model.accum_step % self.model.config.grad_accum == 0:
-            self.scaler.step(self.opt)
-            self.scaler.update()
-            self.model.accum_step = 0
-        else:
-            self.model.accum_step += 1
-
-    def deepspeed_step(self):
-        if self.model.module.accum_step % self.model.module.config.grad_accum == 0:
-            self.model.step()
-            self.model.module.accum_step = 0
-        else:
-            self.model.module.accum_step += 1
-
-    # used to account for gradient accumulations
-    def zero_grad(self, opt: torch.optim.Optimizer):
-        if not self.use_deepspeed:
-            if self.model.accum_step % self.model.config.grad_accum == 0:
-                opt.zero_grad()
-
-    def eval_step(self, dataset):
-        passages = []
-        reviews = []
-        for p, r in dataset:
-            passages.append(p)
-            reviews.append(r)
-
-        # TODO: Ideally should get microbatch size from trainconfig for the second argument
-        passages = chunkBatchElement(passages[0], 8)
-        reviews = chunkBatchElement(reviews[0], 8)
-
-        with torch.no_grad():
-            if self.use_deepspeed:
-                pass_emb, rev_emb = self.model.module.calculate_embeddings(
-                    passages, reviews
-                )
-                val_loss = self.model.module.contrastive_loss(
-                    torch.cat(pass_emb), torch.cat(rev_emb)
-                )
-                val_acc = self.model.module.compute_accuracy(
-                    torch.cat(pass_emb), torch.cat(rev_emb)
-                )
-            else:
-                pass_emb, rev_emb = self.model.calculate_embeddings(passages, reviews)
-                val_loss = self.model.contrastive_loss(
-                    torch.cat(pass_emb), torch.cat(rev_emb)
-                )
-                val_acc = self.model.compute_accuracy(
-                    torch.cat(pass_emb), torch.cat(rev_emb)
-                )
-
-        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
-
-
 # Project encoder output to latent space
 class Projection(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, dropout: float):
@@ -332,9 +257,7 @@ from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-from carp.pytorch.model.architectures.carp_shared_encoder import (
-    CARPSharedEncoder,
-)
+from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoder
 
 
 def get_architecture(name):
