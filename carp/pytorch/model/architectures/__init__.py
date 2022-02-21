@@ -231,6 +231,7 @@ class BaseModel(nn.Module):
     ) -> Dict[str, TensorType[()]]:
         raise NotImplementedError("Must be overridden.")
 
+
 # Project encoder output to latent space
 class Projection(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, dropout: float):
@@ -257,7 +258,9 @@ from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoder
+from carp.pytorch.model.architectures.carp_shared_encoder import (
+    CARPSharedEncoder,
+)
 
 
 def get_architecture(name):

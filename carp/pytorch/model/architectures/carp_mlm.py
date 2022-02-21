@@ -1,14 +1,13 @@
 from typing import List
 
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR, _LRScheduler
+
 from carp.configs import ModelConfig
 from carp.pytorch.data.mlm_pipeline import MLMBatchElement
 from carp.pytorch.model.architectures import *
 from carp.pytorch.training import BaseTrainer, register_trainer
 from carp.util import generate_indices, get_scheduling_func
-
-
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LambdaLR, _LRScheduler
 
 # CARP MLM differs from normal CARP since the first epoch will solely use an MLM objective to improve data efficiency.
 # TODO: The learning rate scheduler needs to account for this, so we need a way to register custom LR schedulers.
@@ -150,13 +149,13 @@ class CARPMLM(BaseModel):
             "Acc/Forward": forward_acc,
         }
 
+
 @register_trainer
 class CARPMLMTrainer(BaseTrainer):
     def __init__(self, config: TrainConfig):
         self.epoch_number = 0
         self.mlm_mode = False
         super().__init__(config)
-
 
     def on_epoch_start(
         self, model: BaseModel, scheduler: _LRScheduler, opt: Optimizer, **kwargs

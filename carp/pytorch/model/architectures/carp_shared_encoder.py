@@ -86,6 +86,7 @@ class CARPSharedEncoder(BaseModel):
             "forward_acc": forward_acc,
         }
 
+
 @register_trainer
 class CARPSharedEncoderTrainer(BaseTrainer):
     def train_deepspeed_step(

@@ -3,11 +3,11 @@ from pathlib import Path
 
 import deepspeed
 import torch
-import wandb
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import Subset, random_split
 from transformers import PreTrainedModel
 
+import wandb
 from carp.clock import Clock
 from carp.configs import CARPConfig
 from carp.pytorch.data import BaseDataPipeline, get_datapipeline
@@ -130,9 +130,7 @@ def train(
             config=args.deepspeed_config,
             mpu=model.mpu if hasattr(model, "mpu") else None,
         )
-        scheduler = LambdaLR(
-            opt.optimizer, get_scheduling_func(trainer.train_config)
-        )
+        scheduler = LambdaLR(opt.optimizer, get_scheduling_func(trainer.train_config))
 
     else:
         opt = torch.optim.AdamW(
@@ -174,12 +172,8 @@ def train(
 
         for passages, reviews in train_data:
             timer.hit()
-            model, scheduler, opt = trainer.before_train_step(
-                model, scheduler, opt
-            )
-            batch_outputs = trainer.train_step(
-                passages, reviews, trainer.train_config
-            )
+            model, scheduler, opt = trainer.before_train_step(model, scheduler, opt)
+            batch_outputs = trainer.train_step(passages, reviews, trainer.train_config)
             model, scheduler, opt = trainer.after_train_step(model, scheduler, opt)
 
             back_time = timer.hit()
@@ -204,8 +198,7 @@ def train(
             # Checkpoint model and scheduler
             if iteration % trainer.train_config.checkpoint_interval == 0:
                 save_iter = (
-                    iteration % (20 * trainer.train_config.checkpoint_interval)
-                    == 0
+                    iteration % (20 * trainer.train_config.checkpoint_interval) == 0
                 )
                 model, scheduler, opt = trainer.before_save(model, scheduler, opt)
                 fn_rank_0(
@@ -219,9 +212,7 @@ def train(
                 model, scheduler, opt = trainer.before_validate_step(
                     model, scheduler, opt
                 )
-                eval_data = trainer.construct_dataloader(
-                    evalset, tokenizer, multi_gpus
-                )
+                eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus)
 
                 eval_out = trainer.eval_step(eval_data)
                 model, scheduler, opt = trainer.after_validate_step(

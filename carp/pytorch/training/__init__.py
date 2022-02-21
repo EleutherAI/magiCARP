@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sys
 from abc import abstractmethod
-from typing import Callable, Dict, Tuple, Any
+from typing import Any, Callable, Dict, Tuple
 
-from catalyst.data import DistributedSamplerWrapper
 import torch
+from catalyst.data import DistributedSamplerWrapper
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
@@ -65,7 +65,7 @@ class BaseTrainer(object):
         self.model = model
         self.opt = opt
         self.scaler = scaler
-        self.use_deepspeed=use_deepspeed
+        self.use_deepspeed = use_deepspeed
 
     def train_step(self, *args, **kwargs):
         if self.use_deepspeed:
@@ -151,7 +151,6 @@ class BaseTrainer(object):
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
-
     # if the child class does not override a trigger, just ignore it
     # TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though
     @abstractmethod
@@ -199,8 +198,7 @@ class BaseTrainer(object):
     def construct_dataloader(
         self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
     ) -> DataLoader:
-        """
-        """
+        """ """
         sampler = RandomSampler(dataset)
 
         if multi_gpus is True:
@@ -232,10 +230,11 @@ class BaseTrainer(object):
 from carp.pytorch.model.architectures.carp import CARPTrainer
 from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
 from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
-#from carp.pytorch.model.architectures.carp_mlm import CARPMLM
-#from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-from carp.pytorch.model.architectures.carp_shared_encoder import CARPSharedEncoderTrainer
-
+# from carp.pytorch.model.architectures.carp_mlm import CARPMLM
+# from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
+from carp.pytorch.model.architectures.carp_shared_encoder import (
+    CARPSharedEncoderTrainer,
+)
 
 
 def get_trainer(name):

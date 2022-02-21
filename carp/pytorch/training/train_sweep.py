@@ -1,10 +1,10 @@
 from argparse import ArgumentParser
 
 import torch
-import wandb
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, RandomSampler, Subset, random_split
 
+import wandb
 from carp.clock import Clock
 from carp.configs import CARPConfig, TrainConfig
 from carp.pytorch.data import BaseDataPipeline
