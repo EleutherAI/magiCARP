@@ -1,12 +1,16 @@
 from abc import abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Iterable, Tuple, Union
-from torch import nn
-import torch.nn.functional as F
+from typing import Iterable
+
 import torch
+import torch.nn.functional as F
 from torchtyping import TensorType
 
-from carp.pytorch.model.encoders import register_encoder, BaseEncoder, BaseEncoderOutput
+from carp.pytorch.model.encoders import (
+    BaseEncoder,
+    BaseEncoderOutput,
+    register_encoder,
+)
+
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
@@ -16,20 +20,27 @@ class SumTextEncoder(BaseEncoder):
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
-    def forward(self, x, mask=None, tokenize: bool = False,
-        mask_sum: bool = True, inputs_embeds : bool = False) -> TensorType['batch', 'embed_dim']:
+    def forward(
+        self,
+        x,
+        mask=None,
+        tokenize: bool = False,
+        mask_sum: bool = True,
+        inputs_embeds: bool = False,
+    ) -> TensorType["batch", "embed_dim"]:
         if tokenize:
             x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
 
-        hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(out)
+        hidden: TensorType["batch", "N", "embed_dim"] = self.extract_fn(out)
         # Mask out pad tokens embeddings
         if mask_sum:
             emb_mask = mask.unsqueeze(2).repeat(1, 1, self.d_model)
             hidden = hidden * emb_mask
-        return BaseEncoderOutput(F.normalize(hidden.sum(1))) # Sum along sequence
+        return BaseEncoderOutput(F.normalize(hidden.sum(1)))  # Sum along sequence
+
 
 @register_encoder
 class EOTTextEncoder(BaseEncoder):
@@ -84,9 +95,11 @@ class MultiCLSEncoder(BaseEncoder):
         """
         return [self.add_cls(s) for s in string_batch]
 
-    def forward(self, x, mask=None, inputs_embeds=False) -> TensorType['batch', 'embed_dim']:
+    def forward(
+        self, x, mask=None, inputs_embeds=False
+    ) -> TensorType["batch", "embed_dim"]:
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
-        hidden: TensorType['batch', 'N', 'embed_dim'] = self.extract_fn(out)
+        hidden: TensorType["batch", "N", "embed_dim"] = self.extract_fn(out)
         batch_size = hidden.size(0)
         # start_inds are just 0-th position
         end_inds = self.last_ones(mask)
@@ -95,6 +108,7 @@ class MultiCLSEncoder(BaseEncoder):
         mid_embed = hidden[torch.arange(batch_size), mid_inds]
         end_embed = hidden[torch.arange(batch_size), end_inds]
         return BaseEncoderOutput(F.normalize(start_embed + mid_embed + end_embed))
+
 
 @register_encoder
 class DirectTextEncoder(BaseEncoder):
@@ -115,20 +129,28 @@ class DirectTextEncoder(BaseEncoder):
         )
         return BaseEncoderOutput(embed)
 
+
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
-
     def __init__(self, model_path: str, model_arch: str):
         super().__init__(model_path, model_arch)
-    
+
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
     def mean_pooling(self, model_output, attention_mask):
-        token_embeddings = model_output[0] #First element of model_output contains all token embeddings
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-    
-    def forward(self, x, mask = None, inputs_embeds = False) -> TensorType['batch', 'embed_dim']:
+        token_embeddings = model_output[
+            0
+        ]  # First element of model_output contains all token embeddings
+        input_mask_expanded = (
+            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        )
+        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+            input_mask_expanded.sum(1), min=1e-9
+        )
+
+    def forward(
+        self, x, mask=None, inputs_embeds=False
+    ) -> TensorType["batch", "embed_dim"]:
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
         return BaseEncoderOutput(self.mean_pooling(out, mask))

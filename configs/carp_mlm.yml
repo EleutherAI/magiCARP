@@ -30,5 +30,5 @@ train_job:
   dupe_protection: true
   hard_dupe_protection: false
   data_pipeline: "MLMDataPipeline"
-  orchestrator: "MLMOrchestrator"
-  
+  trainer: "CARPMLMTrainer"
+  gradient_checkpointing: true

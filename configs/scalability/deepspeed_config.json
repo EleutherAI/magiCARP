@@ -1,0 +1,14 @@
+{
+  "train_batch_size": "auto",
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": "auto",
+      "eps": "auto",
+      "weight_decay": "auto"
+    }
+  },
+  "zero_optimization": {
+    "stage": 1
+  }
+}

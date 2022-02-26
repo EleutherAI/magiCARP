@@ -1,14 +1,14 @@
-import torch
-import torch.nn.functional as F
-from torchtyping import TensorType, patch_typeguard
-from typeguard import typechecked
-from carp.configs import ModelConfig, TrainConfig
-from carp.pytorch.model.architectures import * 
-from carp.pytorch.model.encoders import get_encoder
-from carp.util import mbTokens, generate_indices
 from typing import List
 
+from carp.configs import ModelConfig
+from carp.pytorch.model.architectures import *
+from carp.pytorch.model.encoders import get_encoder
+from carp.util import generate_indices
+
+# TODO: DEEPSPEED SUPPORT (kevin)
+
 patch_typeguard()
+
 
 @typechecked
 @register_architecture
@@ -17,12 +17,8 @@ class CARPMomentum(BaseModel):
         super().__init__()
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
-        self.review_encoder = encoder_class(
-            config.model_path, config.model_arch
-        )
+        self.passage_encoder = encoder_class(config.model_path, config.model_arch)
+        self.review_encoder = encoder_class(config.model_path, config.model_arch)
         self.latent_dim = config.latent_dim
         self.momentum = config.momentum
         self.pass_projector, self.rev_projector = self._make_projection_layers(config)
@@ -49,8 +45,10 @@ class CARPMomentum(BaseModel):
             [self.rev_projector, self.rev_projector_m],
         ]
         self.copy_params()
-    
-    def momentum_pseudo_targets(self, pass_embeds, rev_embeds, pass_embeds_m, rev_embeds_m):
+
+    def momentum_pseudo_targets(
+        self, pass_embeds, rev_embeds, pass_embeds_m, rev_embeds_m
+    ):
         # Second half stolen shamelessly from Salesforce ALBEF: https://github.com/salesforce/ALBEF/blob/main/models/model_pretrain.py
         with torch.no_grad():
             pass_embeds = F.normalize(torch.cat(pass_embeds))
@@ -61,16 +59,24 @@ class CARPMomentum(BaseModel):
             sim_r2p_m = rev_embeds_m @ pass_embeds.T * self.logit_scale.exp()
             sim_targets = torch.zeros(sim_p2r_m.size(), device=self.device)
             sim_targets.fill_diagonal_(1)
-            sim_p2r_targets = self.momentum * F.softmax(sim_p2r_m, dim=1) + (1 - self.momentum) * sim_targets
-            sim_r2p_targets = self.momentum * F.softmax(sim_r2p_m, dim=1) + (1 - self.momentum) * sim_targets
+            sim_p2r_targets = (
+                self.momentum * F.softmax(sim_p2r_m, dim=1)
+                + (1 - self.momentum) * sim_targets
+            )
+            sim_r2p_targets = (
+                self.momentum * F.softmax(sim_r2p_m, dim=1)
+                + (1 - self.momentum) * sim_targets
+            )
         return sim_p2r_targets, sim_r2p_targets
 
-    def loss_fn(self, x: TensorType[-1, 'latent_dim'], y: TensorType[-1, 'latent_dim'], target):
+    def loss_fn(
+        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"], target
+    ):
         """Momentum-relaxed contrastive loss.
-        The basic idea is to make the contrastive learning loss a little more 'forgiving'. An EMA of the two CARP heads is 
-        maintained and used to estimate a "distribution" of reasonable probabilities for pairing each review in the batch with an 
+        The basic idea is to make the contrastive learning loss a little more 'forgiving'. An EMA of the two CARP heads is
+        maintained and used to estimate a "distribution" of reasonable probabilities for pairing each review in the batch with an
         associated passage, as opposed to the Dirac distribution with all of the weight just on the correct pairing (down the diagonal).
-        Then we take a weighted average of the true target and the EMA estimated target and use compare the current trained heads 
+        Then we take a weighted average of the true target and the EMA estimated target and use compare the current trained heads
         predictions against _that_ weighted average.
         Args:
             x (Tensortype['batch_size', 'latent_dim']): CARP embedding of the passages (from the story)
@@ -95,17 +101,9 @@ class CARPMomentum(BaseModel):
 
     def momentum_embeddings(
         self,
-        passages: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
-        reviews: Iterable[
-            Tuple[
-                BatchElement
-            ]
-        ],
-        return_only_embeddings : bool = True,
+        passages: Iterable[Tuple[BatchElement]],
+        reviews: Iterable[Tuple[BatchElement]],
+        return_only_embeddings: bool = True,
     ):
         self._momentum_update()
         with torch.no_grad(), torch.cuda.amp.autocast():
@@ -177,7 +175,9 @@ class CARPMomentum(BaseModel):
                     torch.cat(pass_tmp), torch.cat(rev_encs)
                 )
                 if self.momentum > 0.0:
-                    mom_loss_p2r = self.loss_fn(torch.cat(pass_tmp), torch.cat(rev_encs), sim_p2r_targets)
+                    mom_loss_p2r = self.loss_fn(
+                        torch.cat(pass_tmp), torch.cat(rev_encs), sim_p2r_targets
+                    )
                 else:
                     mom_loss_p2r = torch.zeros([])
                 loss = self.momentum * mom_loss_p2r + (1 - self.momentum) * con_loss
@@ -194,7 +194,9 @@ class CARPMomentum(BaseModel):
                     torch.cat(pass_encs), torch.cat(rev_tmp)
                 )
                 if self.momentum > 0.0:
-                    mom_loss_r2p = self.loss_fn(torch.cat(rev_tmp), torch.cat(pass_encs), sim_r2p_targets)
+                    mom_loss_r2p = self.loss_fn(
+                        torch.cat(rev_tmp), torch.cat(pass_encs), sim_r2p_targets
+                    )
                 else:
                     mom_loss_r2p = torch.zeros([])
                 loss = self.momentum * mom_loss_r2p + (1 - self.momentum) * con_loss

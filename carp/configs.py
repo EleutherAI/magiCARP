@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict
+
 import yaml
 
 
@@ -14,8 +15,8 @@ class ModelConfig:
     momentum: float = 0.0
     device: str = "cuda:0"
     grad_accum: int = 1
-    model_eps: float = 1.0e-4 # Epsilon to add to logits in contrastive loss
-    grad_clip: float = -1 # What to clip grad norms to (set to -1 for no clip)
+    model_eps: float = 1.0e-4  # Epsilon to add to logits in contrastive loss
+    grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -37,18 +38,19 @@ class TrainConfig:
     checkpoint_interval: int
     validate_interval: int
     eval_selection: str
-    data_pipeline : str = "BaseDataPipeline"
-    orchestrator : str = "BaseOrchestrator"
+    data_pipeline: str = "BaseDataPipeline"
+    trainer: str = "CARPTrainer"
     # Dataset sometimes contains short reviews like "lol"
     # These are harmful during training because if a batch contains more than one
     # then the duplicates will create exploding gradients through CE loss
     # This removes all pass/rev where |pass| < 8 or |rev| < 8 (in chars)
     dupe_protection: bool = True
-    hard_dupe_protection: bool =False  # Manually checks all batches for duplicates
+    hard_dupe_protection: bool = False  # Manually checks all batches for duplicates
     validation_size: int = 1000
     use_half: bool = False
     use_bucket: bool = False
-    opt_eps: float = 1e-4 # Epsilon for optimizer
+    opt_eps: float = 1e-4  # Epsilon for optimizer
+    gradient_checkpointing: bool = False
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

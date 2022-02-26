@@ -1,22 +1,23 @@
-from torch.functional import Tensor
-from carp.pytorch.data import *
-from carp.pytorch.model.encoders import BaseEncoder
+from dataclasses import dataclass
+
+from torchtyping import TensorType
 from transformers.data.data_collator import DataCollatorForLanguageModeling
 
-from dataclasses import dataclass
-from torchtyping import TensorType
+from carp.pytorch.data import *
+from carp.pytorch.model.encoders import BaseEncoder
 
 
 @dataclass
 class MLMBatchElement(BatchElement):
-    mlm_input_ids : TensorType[-1, "pass_N"]
-    mlm_labels : TensorType[-1, "pass_N"]
+    mlm_input_ids: TensorType[-1, "pass_N"]
+    mlm_labels: TensorType[-1, "pass_N"]
 
 
 @register_datapipeline
 class MLMDataPipeline(BaseDataPipeline):
-    
+
     """Dataset wrapper class to ease working with the CARP dataset and Pytorch data utilities."""
+
     def __init__(
         self,
         dupe_protection: bool = True,
@@ -25,7 +26,7 @@ class MLMDataPipeline(BaseDataPipeline):
         super().__init__(dupe_protection, path)
 
     @staticmethod
-    def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
+    def tokenizer_factory(_tok: Callable, encoder: BaseEncoder) -> Callable:
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
         Args:

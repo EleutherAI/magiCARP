@@ -1,28 +1,30 @@
 from argparse import ArgumentParser
-from carp.clock import Clock
-from carp.configs import CARPConfig, TrainConfig
-from carp.util import get_scheduling_func
-from carp.pytorch.data import BaseDataPipeline
-from carp.pytorch.model import CARPMomentum
+
 import torch
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader, random_split, RandomSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, Subset, random_split
+
 import wandb
+from carp.clock import Clock
+from carp.configs import CARPConfig, TrainConfig
+from carp.pytorch.data import BaseDataPipeline
+from carp.pytorch.model import CARPMomentum
+from carp.util import get_scheduling_func
 
 
 def get_arguments():
     parser = ArgumentParser()
-    parser.add_argument('--linear_projection', type=bool)
-    parser.add_argument('--momentum', type=float)
-    parser.add_argument('--lr_ramp_steps', type=int)
-    parser.add_argument('--lr_decay_steps', type=int)
-    parser.add_argument('--learning_rate_target', type=float)
-    parser.add_argument('--proj_dropout', type=float)
-    parser.add_argument('--use_half', type=bool)
-    parser.add_argument('--epochs', type=int)
-    parser.add_argument('--n_ctx', type=int)
-    parser.add_argument('--latent_dim', type=int)
-    parser.add_argument("--data_path", type=str, default='carp/dataset')
+    parser.add_argument("--linear_projection", type=bool)
+    parser.add_argument("--momentum", type=float)
+    parser.add_argument("--lr_ramp_steps", type=int)
+    parser.add_argument("--lr_decay_steps", type=int)
+    parser.add_argument("--learning_rate_target", type=float)
+    parser.add_argument("--proj_dropout", type=float)
+    parser.add_argument("--use_half", type=bool)
+    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--n_ctx", type=int)
+    parser.add_argument("--latent_dim", type=int)
+    parser.add_argument("--data_path", type=str, default="carp/dataset")
     parser.add_argument("--config_path", type=str, default="./sentence_conf.yml")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--load_checkpoint", type=bool, default=False)
@@ -71,11 +73,19 @@ def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
 
 
 # Dataset assumed to be list of pairs on memory
-def train(model, dataset: BaseDataPipeline, evalset: BaseDataPipeline, config: TrainConfig, args):
+def train(
+    model,
+    dataset: BaseDataPipeline,
+    evalset: BaseDataPipeline,
+    config: TrainConfig,
+    args,
+):
     # Tokenizes string batch using encoder tokenizer
     LEARNING_RATE_INIT = config.learning_rate_init
     LOAD_CHECKPOINT = args.load_checkpoint
-    tokenizer = BaseDataPipeline.tokenizer_factory(model.passage_encoder.tok, config.n_ctx)
+    tokenizer = BaseDataPipeline.tokenizer_factory(
+        model.passage_encoder.tok, config.n_ctx
+    )
     opt = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE_INIT, weight_decay=0)
     scheduler = LambdaLR(opt, get_scheduling_func(config))
     scaler = torch.cuda.amp.GradScaler()
@@ -153,7 +163,7 @@ if __name__ == "__main__":
     config.train_job.use_half = args.use_half
     config.model.latent_dim = args.latent_dim
     config.model.momentum = args.momentum
-    config.model.linear_projection= args.linear_projection
+    config.model.linear_projection = args.linear_projection
     config.model.proj_dropout = args.proj_dropout
     model = get_model(config, args.load_checkpoint)
     print("N Parameters: " + str(param_count(model)))
@@ -166,7 +176,7 @@ if __name__ == "__main__":
         )
         wandb.config.update({"seed": args.seed})
         wandb.watch(model)
-        print('wandb configured')
+        print("wandb configured")
     dataset, evalset = get_datasets(train_config, args.data_path, args.seed)
     train(model, dataset, evalset, train_config, args)
     wandb.finish()

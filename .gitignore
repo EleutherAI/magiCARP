@@ -1,12 +1,13 @@
 *.pyc
 *.pt
 *.rar
-*.txt
 *.swp
+*.csv
 .vscode/
 clip/wandb
 .ipynb_checkpoints/
 .venv/
+.idea
 .pytest_cache/
 carp/wandb/
 wandb/
@@ -14,3 +15,4 @@ carp/dataset/dataset_dict.json
 carp/dataset/train/cache-a5b0849dd9416bdb.arrow
 carp/dataset/train/dataset_info.json
 carp/dataset/train/state.json
+carp/pytorch/data/utils/api_key.txt

@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, Dict, Tuple, Iterable, Callable
+from functools import partial
+from typing import Callable, Dict, Iterable, Tuple
 
 from datasets import load_from_disk
 from torch.utils.data import Dataset
-from carp.pytorch.data.utils.data_util import create_tok, BatchElement
 from typeguard import typechecked
-from functools import partial
 
+from carp.pytorch.data.utils.data_util import BatchElement, create_tok
 from carp.pytorch.model.encoders import BaseEncoder
 
 # specifies a dictionary of architectures
 _DATAPIPELINE: Dict[str, any] = {}  # registry
 
-def register_datapipeline(name):
-    """Decorator used register a CARP architecture 
 
-        Args:
-            name: Name of the architecture
+def register_datapipeline(name):
+    """Decorator used register a CARP architecture
+
+    Args:
+        name: Name of the architecture
     """
 
     def register_class(cls, name):
@@ -29,7 +30,7 @@ def register_datapipeline(name):
     if isinstance(name, str):
         name = name.lower()
         return lambda c: register_class(c, name)
-    
+
     cls = name
     name = cls.__name__
     register_class(cls, name.lower())
@@ -70,8 +71,10 @@ class BaseDataPipeline(Dataset):
         return len(self.passages)
 
     @staticmethod
-    def create_tokenizer_factory(call_tokenizer : Callable, tokenizer_factory : Callable, context_len : int) -> Callable:
-        
+    def create_tokenizer_factory(
+        call_tokenizer: Callable, tokenizer_factory: Callable, context_len: int
+    ) -> Callable:
+
         """Function creates a callable tokenizer subroutine and uses it to curry the tokenizer factory
 
         Args:
@@ -85,7 +88,7 @@ class BaseDataPipeline(Dataset):
         return partial(tokenizer_factory, tok_func)
 
     @staticmethod
-    def tokenizer_factory(_tok : Callable, encoder: BaseEncoder)  -> Callable:
+    def tokenizer_factory(_tok: Callable, encoder: BaseEncoder) -> Callable:
 
         """Function factory that creates a collate function for use with a torch.util.data.Dataloader
 
@@ -95,6 +98,7 @@ class BaseDataPipeline(Dataset):
         Returns:
             Callable: A function that will take a batch of string tuples and tokenize them properly.
         """
+
         @typechecked
         def collate(
             data: Iterable[Tuple[str, str]]
@@ -111,12 +115,15 @@ class BaseDataPipeline(Dataset):
             )
 
         return collate
-    
+
+
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
 
+
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]
+
 
 def get_datapipeline_names():
     return _DATAPIPELINE.keys()
