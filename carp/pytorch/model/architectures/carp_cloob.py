@@ -188,8 +188,10 @@ class CARPCloobTrainer(BaseTrainer):
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
         forward_output = self.model(passages, reviews, config)
+        
+        # Does gradient accumulation
+        self.zero_grad()
 
-        self.opt.zero_grad()
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
@@ -217,8 +219,8 @@ class CARPCloobTrainer(BaseTrainer):
             self.scaler.unscale_(self.opt)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
 
-        self.scaler.step(self.opt)
-        self.scaler.update()
+        self.torch_step()
+
         return {
             "Loss/Train": loss,
             "Acc/Forward": forward_output["forward_acc"],

@@ -94,7 +94,7 @@ class CARPMLM(BaseModel):
             )
             for i in microbatch_inds
         ]
-        self.zero_grad(opt)
+        self.zero_grad()
 
         def accum_every_mb(inp: MLMBatchElement, passage: bool = True):
             with torch.cuda.amp.autocast():

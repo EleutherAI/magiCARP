@@ -307,7 +307,7 @@ class CARPCoOpTrainer(BaseTrainer):
         forward_output = self.model(passages, reviews, config)
 
         # does gradient accumulation
-        self.zero_grad(self.opt)
+        self.zero_grad()
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):

@@ -100,16 +100,13 @@ class BaseTrainer(object):
         else:
             self.model.module.accum_step += 1
 
-    def zero_grad(self, opt: torch.optim.Optimizer):
+    def zero_grad(self):
         """
         Used to account for gradient accumulations. Accounts for deepspeed accumulation being different.
-        Args:
-            opt: Torch optimizer that we will zero grad if needed
-
         """
         if not self.use_deepspeed:
             if self.model.accum_step % self.model.config.grad_accum == 0:
-                opt.zero_grad()
+                self.opt.zero_grad()
 
     def eval_step(self, dataset):
         """
