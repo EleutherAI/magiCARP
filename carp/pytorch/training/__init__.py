@@ -47,7 +47,7 @@ def register_trainer(name):
 # used for methods with weird forms of learning rate schedulers, weird training routines,
 # or for early stopping in hyper parameter sweeps
 
-# eventually orchestrator will interface with ray for distributed systems
+# eventually trainer will interface with ray for distributed systems
 class BaseTrainer(object):
     def __init__(self, train_config: TrainConfig):
         self.train_config = train_config

@@ -33,7 +33,7 @@ model config and train config.
 * validate_interval | *int* | how often to run model on validation set
 * eval_selection | *string* | how the validation set is chosen
 * data_pipeline | *string* | the data pipeline to use for training (see `Preparing The Dataset <dataset>`_)
-* orchestrator | *string* |
+* trainer | *string* |
 * dupe_protection | *boolean* | if true, prunes any data points that have less than 8 characters
 * hard_dupe_protection | *boolean* | if true, manually checks all batches for duplicate data points and skips batches containing duplicates
 * validation_size | *int* | size of validation set
