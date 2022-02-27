@@ -13,7 +13,7 @@ from carp.examples.vis.vis_util import spherical_coord, scatter_with_names
 CHUNK_SIZE = 512
 MAX_CHUNKS = 16 # Only embed this many chunks (set to -1 for all)
 N_CTX = 512
-SPHERICAL = True
+SPHERICAL = False
 
 # Lots of stuff from before now encapsulated in this loader class
 # Load model
