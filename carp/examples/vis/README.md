@@ -7,6 +7,10 @@ cloobvis.py: Randomly samples from dataset, gets encodings, performs PCA on enco
 
 cloobvis.ipynb: Similar to above but interactive and does not have an interactive plot.  
 
+umapvis.py: Performs UMAP for dimensionality reduction on large section of encodings of dataset. Besides using UMAP instead of PCA, same as cloobvis. Defaults to using hypersphere coordinates, feel free to disable.
+
+UMAPVisualization.ipynb: Interactive version of above script lacking interactivity.
+
  **TODO**:
 
 - Add visualization of user defined samples
