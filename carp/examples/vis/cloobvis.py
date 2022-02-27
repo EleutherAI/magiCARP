@@ -201,4 +201,3 @@ def spherebasecompare(size, mode = "R"):
 # spherebasecompare(size, mode) does both one after the other for direct comparison
 if __name__ == "__main__":
     spherebasecompare(1024, mode = "R")
-    
