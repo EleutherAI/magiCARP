@@ -158,7 +158,7 @@ class BaseModel(nn.Module):
             x = F.normalize(x)
             y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        return x @ y.T + 1e-6
+        return torch.abs(x @ y.T) + 1e-6
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
@@ -202,7 +202,7 @@ class BaseModel(nn.Module):
         x: BatchElement,
         encoder,
         projector,
-        normalize=True,
+        normalize=False,
     ):
         x = encoder(x.input_ids.to(self.config.device), x.mask.to(self.config.device))
         x.hidden = projector(x.hidden)
