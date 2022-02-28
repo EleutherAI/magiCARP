@@ -289,8 +289,15 @@ class CARPCoOpTrainer(BaseTrainer):
                 torch.cat(forward_output["rev_labels"]),
             )
 
-            self.model.backward(loss)
+            self.deepspeed_backwards(loss)
 
+        # Average the model gradients
+        self.average_gradients()
+
+        # Clipping
+        self.clip_gradients()
+
+        # Step the model
         self.deepspeed_step()
 
         return {
@@ -319,14 +326,16 @@ class CARPCoOpTrainer(BaseTrainer):
                     forward_output["rev_encs"],
                     torch.cat(forward_output["rev_labels"]),
                 )
+                
+            self.torch_backwards(loss)
 
-            self.scaler.scale(loss).backward()
+        # Average the model gradients
+        self.average_gradients()
 
         # Clipping
-        if self.model.config.grad_clip != -1:
-            self.scaler.unscale_(self.opt)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
+        self.clip_gradients()
 
+        # Step the model
         self.torch_step()
 
         return {

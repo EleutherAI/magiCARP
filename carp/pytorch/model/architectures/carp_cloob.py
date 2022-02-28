@@ -157,7 +157,7 @@ class CARPCloobTrainer(BaseTrainer):
             loss = self.model.module.cloob(
                 torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
             )
-            self.model.backward(loss)
+            self.deepspeed_backwards(loss)
 
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
@@ -168,11 +168,16 @@ class CARPCloobTrainer(BaseTrainer):
             loss = self.model.module.cloob(
                 torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
             )
-            self.model.backward(loss)
+            self.deepspeed_backwards(loss)
 
-        self.model.step()
-        # Kevin: Why not accumulation?
-        # it's different with carp.py
+        # Average the model gradients
+        self.average_gradients()
+
+        # Clipping
+        self.clip_gradients()
+
+        # Step the model
+        self.deepspeed_step()
 
         return {
             "Loss/Train": loss,
@@ -188,7 +193,7 @@ class CARPCloobTrainer(BaseTrainer):
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
         forward_output = self.model(passages, reviews, config)
-        
+
         # Does gradient accumulation
         self.zero_grad()
 
@@ -202,7 +207,7 @@ class CARPCloobTrainer(BaseTrainer):
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
                 )
 
-            self.scaler.scale(loss).backward()
+            self.torch_backwards(loss)
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
@@ -213,12 +218,15 @@ class CARPCloobTrainer(BaseTrainer):
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
                 )
 
-            self.scaler.scale(loss).backward()
-        # Clipping
-        if self.model.config.grad_clip != -1:
-            self.scaler.unscale_(self.opt)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
+            self.torch_backwards(loss)
 
+        # Average the model gradients
+        self.average_gradients()
+
+        # Clipping
+        self.clip_gradients()
+
+        # Step the model
         self.torch_step()
 
         return {

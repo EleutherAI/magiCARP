@@ -52,6 +52,10 @@ class BaseTrainer(object):
     def __init__(self, train_config: TrainConfig):
         self.train_config = train_config
         self.force_break = False
+        
+        # Used in determining the denominator for averaging gradients 
+        self.backwards_steps_cur = 0
+        self.backwards_steps_max = -1
 
     def set_train_params(self, model, opt, scaler, use_deepspeed=False):
         """
@@ -78,6 +82,35 @@ class BaseTrainer(object):
 
     def train_torch_step(self, *args, **kwargs):
         raise NotImplementedError
+
+    def torch_backwards(self, loss):
+        """
+        Runs backwards using the CUDA AMP scaler
+        Args:
+            loss: Loss to run backwards on
+        """
+        self.scaler.scale(loss).backward()
+
+        # Track the number of backwards per step
+        self.backwards_steps_cur += 1
+        self.backwards_steps_max = max(
+            self.backwards_steps_max,
+            self.backwards_steps_cur)
+
+    def deepspeed_backwards(self, loss):
+        """
+        Runs backwards using the deespeed optimizer
+        Args:
+            loss: Loss to run backwards on
+        """
+        self.model.backward(loss)
+
+        # Track the number of backwards per step
+        self.backwards_steps_cur += 1
+        self.backwards_steps_max = max(
+            self.backwards_steps_max,
+            self.backwards_steps_cur)
+
 
     def torch_step(self):
         """
@@ -107,6 +140,30 @@ class BaseTrainer(object):
         if not self.use_deepspeed:
             if self.model.accum_step % self.model.config.grad_accum == 0:
                 self.opt.zero_grad()
+
+    def average_gradients(self, steps: int = None):
+        """
+        Divides the model gradients by step
+        Args:
+            step: The denominator to divide the gradients by
+        """
+        # If steps is not passed, just used the estimated number of steps 
+        self.backwards_steps_cur = 0
+        if steps is None:
+            steps = self.backwards_steps_max
+
+        # Average gradients 
+        for parameter in self.model.parameters():
+            if parameter.grad is not None:
+                parameter.grad /= steps
+
+    def clip_gradients(self):
+        """
+        Clips the model gradients as according to the train config
+        """
+        if self.model.config.grad_clip != -1:
+            self.scaler.unscale_(self.opt)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.train_config.grad_clip)
 
     def eval_step(self, dataset):
         """
