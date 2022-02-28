@@ -207,7 +207,7 @@ class BaseModel(nn.Module):
         x = encoder(x.input_ids.to(self.config.device), x.mask.to(self.config.device))
         x.hidden = projector(x.hidden)
         if normalize:
-            return F.normalize(x)
+            x.hidden = F.normalize(x.hidden)
         return x
 
     def encode_reviews(self, x, normalize=True):
