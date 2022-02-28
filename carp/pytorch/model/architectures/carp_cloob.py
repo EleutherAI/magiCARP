@@ -64,11 +64,29 @@ patch_typeguard()
 @register_architecture
 class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
-        super().__init__(config)
+        super().__init__(config, skip_init=True)
 
+        # Run the normal CARP init since we are skipping it
+        self.config = config
+        encoder_class = get_encoder(config.encoder_type)
+        self.passage_encoder = encoder_class(config.model_path, config.model_arch)
+        self.review_encoder = encoder_class(config.model_path, config.model_arch)
+        self.latent_dim = self.config.latent_dim
+        self.pass_projector, self.rev_projector = self._make_projection_layers(
+            self.config
+        )
+        self.clamp_min = torch.log(
+            torch.tensor([1 / 100], device=self.config.device)
+        )
+        self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
+
+
+        # Add cloob specific parameters
         self.hopfield_scale = torch.ones([], device=self.config.device) * torch.log(
             torch.tensor([8], device=self.config.device, requires_grad=False)
         )
+        self.logit_scale = torch.ones([], device=self.config.device) *\
+             torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
@@ -171,7 +189,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.deepspeed_backwards(loss)
 
         # Average the model gradients
-        self.average_gradients()
+        #self.average_gradients()
 
         # Clipping
         self.clip_gradients()
@@ -218,12 +236,11 @@ class CARPCloobTrainer(BaseTrainer):
                 )
 
             self.torch_backwards(loss)
-
         # Average the model gradients
-        self.average_gradients()
+        #self.average_gradients()
 
         # Clipping
-        self.clip_gradients()
+        #self.clip_gradients()
 
         # Step the model
         self.torch_step()

@@ -162,19 +162,19 @@ def train(
         except:
             print_rank_0("Unable to load scheduler and/or optimizer. Continuing.")
 
-    model.train()
+    trainer.model.train()
     timer = Clock()
     iteration, best_val = 0, 100
 
     for epoch in range(trainer.train_config.epochs):
-        model, scheduler, opt = trainer.on_epoch_start(model, scheduler, opt)
+        trainer.on_epoch_start()
         train_data = trainer.construct_dataloader(dataset, tokenizer, multi_gpus)
 
         for passages, reviews in train_data:
             timer.hit()
-            model, scheduler, opt = trainer.before_train_step(model, scheduler, opt)
+            trainer.before_train_step()
             batch_outputs = trainer.train_step(passages, reviews, trainer.train_config)
-            model, scheduler, opt = trainer.after_train_step(model, scheduler, opt)
+            trainer.after_train_step()
 
             back_time = timer.hit()
             back_time = (
@@ -200,24 +200,20 @@ def train(
                 save_iter = (
                     iteration % (20 * trainer.train_config.checkpoint_interval) == 0
                 )
-                model, scheduler, opt = trainer.before_save(model, scheduler, opt)
+                trainer.before_save()
                 fn_rank_0(
                     save_checkpoint, save_fn, scheduler, opt, iteration, save_iter
                 )
-                model, scheduler, opt = trainer.after_save(model, scheduler, opt)
+                trainer.after_save()
             # Run on eval set
             if iteration % trainer.train_config.validate_interval == 0:
                 print_rank_0("VALIDATING...")
-                model.eval()
-                model, scheduler, opt = trainer.before_validate_step(
-                    model, scheduler, opt
-                )
+                trainer.model.eval()
+                trainer.before_validate_step()
                 eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus)
 
                 eval_out = trainer.eval_step(eval_data)
-                model, scheduler, opt = trainer.after_validate_step(
-                    model, scheduler, opt
-                )
+                trainer.after_validate_step()
 
                 if eval_out["Loss/Validation"] < best_val:
                     best_val = eval_out["Loss/Validation"]
@@ -230,16 +226,16 @@ def train(
                     fn_rank_0(save_fn, f"./best/{iteration}/")
                 if trainer.train_config.do_log:
                     fn_rank_0(wandb.log, eval_out)
-                model.train()
+                trainer.model.train()
 
             iteration += 1
 
             scheduler.step()
 
             if USE_DEEPSPEED:
-                model.module.clamp()
+                trainer.model.module.clamp()
             else:
-                model.clamp()
+                trainer.model.clamp()
 
 
 def param_count(model):

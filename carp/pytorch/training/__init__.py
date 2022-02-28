@@ -208,46 +208,32 @@ class BaseTrainer(object):
     # if the child class does not override a trigger, just ignore it
     # TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though
     @abstractmethod
-    def before_validate_step(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def before_validate_step(self):
+        pass
 
     @abstractmethod
-    def after_validate_step(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def after_validate_step(self):
+        pass
 
     @abstractmethod
-    def before_train_step(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def before_train_step(self):
+        pass
 
     @abstractmethod
-    def after_train_step(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def after_train_step(self):
+        pass
 
     @abstractmethod
-    def before_save(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def before_save(self):
+        pass
 
     @abstractmethod
-    def after_save(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def after_save(self):
+        pass
 
     @abstractmethod
-    def on_epoch_start(
-        self, model, scheduler: _LRScheduler, opt: Optimizer, **kwargs
-    ) -> Tuple[Any, _LRScheduler, Optimizer]:
-        return model, scheduler, opt
+    def on_epoch_start(self):
+        pass
 
     def construct_dataloader(
         self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
