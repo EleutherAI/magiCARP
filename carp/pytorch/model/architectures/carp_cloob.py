@@ -193,7 +193,6 @@ class CARPCloobTrainer(BaseTrainer):
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
         forward_output = self.model(passages, reviews, config)
-
         # Does gradient accumulation
         self.zero_grad()
 
