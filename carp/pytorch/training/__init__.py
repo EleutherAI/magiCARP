@@ -141,7 +141,7 @@ class BaseTrainer(object):
             if self.model.accum_step % self.model.config.grad_accum == 0:
                 self.opt.zero_grad()
 
-    def average_gradients(self, steps: int = None):
+    def average_gradients(self, steps: float = None):
         """
         Divides the model gradients by step
         Args:
@@ -155,7 +155,7 @@ class BaseTrainer(object):
         # Average gradients 
         for parameter in self.model.parameters():
             if parameter.grad is not None:
-                parameter.grad /= steps
+                parameter.grad /= float(steps)**(0.5)
 
     def clip_gradients(self):
         """
@@ -238,7 +238,6 @@ class BaseTrainer(object):
     def construct_dataloader(
         self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
     ) -> DataLoader:
-        """ """
         sampler = RandomSampler(dataset)
 
         if multi_gpus is True:

@@ -75,11 +75,11 @@ class CARPCloob(BaseModel):
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config
         )
+
         self.clamp_min = torch.log(
             torch.tensor([1 / 100], device=self.config.device)
         )
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
-
 
         # Add cloob specific parameters
         self.hopfield_scale = torch.ones([], device=self.config.device) * torch.log(
@@ -236,11 +236,12 @@ class CARPCloobTrainer(BaseTrainer):
                 )
 
             self.torch_backwards(loss)
+
         # Average the model gradients
-        #self.average_gradients()
+        #self.average_gradients(1./100.)
 
         # Clipping
-        #self.clip_gradients()
+        self.clip_gradients()
 
         # Step the model
         self.torch_step()
