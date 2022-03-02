@@ -186,7 +186,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.deepspeed_backwards(loss)
 
         # Average the model gradients
-        #self.average_gradients()
+        self.average_gradients()
 
         # Clipping
         self.clip_gradients()
@@ -235,7 +235,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.torch_backwards(loss)
 
         # Average the model gradients
-        #self.average_gradients(1./100.)
+        self.average_gradients()
 
         # Clipping
         self.clip_gradients()

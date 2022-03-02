@@ -3,6 +3,7 @@ from pathlib import Path
 
 import deepspeed
 import torch
+import madgrad
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import Subset, random_split
 from transformers import PreTrainedModel
@@ -133,10 +134,10 @@ def train(
         scheduler = LambdaLR(opt.optimizer, get_scheduling_func(trainer.train_config))
 
     else:
-        opt = torch.optim.AdamW(
+        opt = madgrad.MADGRAD(
             model.parameters(),
             lr=LEARNING_RATE_INIT,
-            weight_decay=0,
+            weight_decay=trainer.train_config.weight_decay,
             eps=trainer.train_config.opt_eps,
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))

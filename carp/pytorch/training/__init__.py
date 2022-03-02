@@ -151,11 +151,11 @@ class BaseTrainer(object):
         self.backwards_steps_cur = 0
         if steps is None:
             steps = self.backwards_steps_max
-
-        # Average gradients 
-        for parameter in self.model.parameters():
-            if parameter.grad is not None:
-                parameter.grad /= float(steps)**(0.5)
+        if self.train_config.gradient_averaging:
+            # Average gradients 
+            for parameter in self.model.parameters():
+                if parameter.grad is not None:
+                    parameter.grad /= float(steps)**(0.5)
 
     def clip_gradients(self):
         """
