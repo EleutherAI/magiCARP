@@ -124,12 +124,16 @@ class BaseModel(nn.Module):
         self.logit_scale = self.attempt_load(path, "logit_scale.pt")
 
     def compute_accuracy(
-        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        normalize: bool = False,
     ):
         with torch.no_grad():
             n = x.shape[0]
-            x = F.normalize(x)
-            y = F.normalize(y)
+            if normalize:
+                x = F.normalize(x)
+                y = F.normalize(y)
             logits = x @ y.T * self.logit_scale.exp()
             labels = torch.arange(n, device=self.config.device)
             acc_i = (torch.argmax(logits, dim=1) == labels).sum()
@@ -137,7 +141,10 @@ class BaseModel(nn.Module):
         return (acc_i + acc_t) / n / 2
 
     def cosine_sim(
-        self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        normalize=False,
     ):
         """
         Computes the cosine similarity between two sets of vectors x,y
@@ -147,11 +154,11 @@ class BaseModel(nn.Module):
         Returns:
             Matrix of size pass_N x rev_N
         """
-
-        x = F.normalize(x)
-        y = F.normalize(y)
+        if normalize:
+            x = F.normalize(x)
+            y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        return x @ y.T + 1e-6
+        return torch.abs(x @ y.T) + 1e-6
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
@@ -195,16 +202,19 @@ class BaseModel(nn.Module):
         x: BatchElement,
         encoder,
         projector,
+        normalize=False,
     ):
         x = encoder(x.input_ids.to(self.config.device), x.mask.to(self.config.device))
         x.hidden = projector(x.hidden)
+        if normalize:
+            x.hidden = F.normalize(x.hidden)
         return x
 
-    def encode_reviews(self, x):
-        return self._embed_data(x, self.review_encoder, self.rev_projector)
+    def encode_reviews(self, x, normalize=True):
+        return self._embed_data(x, self.review_encoder, self.rev_projector, normalize)
 
-    def encode_passages(self, x):
-        return self._embed_data(x, self.passage_encoder, self.pass_projector)
+    def encode_passages(self, x, normalize=True):
+        return self._embed_data(x, self.passage_encoder, self.pass_projector, normalize)
 
     def calculate_embeddings(
         self,

@@ -64,11 +64,29 @@ patch_typeguard()
 @register_architecture
 class CARPCloob(BaseModel):
     def __init__(self, config: ModelConfig):
-        super().__init__(config)
+        super().__init__(config, skip_init=True)
 
+        # Run the normal CARP init since we are skipping it
+        self.config = config
+        encoder_class = get_encoder(config.encoder_type)
+        self.passage_encoder = encoder_class(config.model_path, config.model_arch)
+        self.review_encoder = encoder_class(config.model_path, config.model_arch)
+        self.latent_dim = self.config.latent_dim
+        self.pass_projector, self.rev_projector = self._make_projection_layers(
+            self.config
+        )
+
+        self.clamp_min = torch.log(
+            torch.tensor([1 / 100], device=self.config.device)
+        )
+        self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
+
+        # Add cloob specific parameters
         self.hopfield_scale = torch.ones([], device=self.config.device) * torch.log(
             torch.tensor([8], device=self.config.device, requires_grad=False)
         )
+        self.logit_scale = torch.ones([], device=self.config.device) *\
+             torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
@@ -91,9 +109,6 @@ class CARPCloob(BaseModel):
         image_features: TensorType[-1, "latent_dim"],
         text_features: TensorType[-1, "latent_dim"],
     ) -> TensorType[(), float]:
-
-        image_features = F.normalize(image_features)
-        text_features = F.normalize(text_features)
 
         p_xx, p_yy, p_xy, p_yx = hopfield_retrieval(
             image_features, text_features, self.hopfield_scale
@@ -157,7 +172,7 @@ class CARPCloobTrainer(BaseTrainer):
             loss = self.model.module.cloob(
                 torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
             )
-            self.model.backward(loss)
+            self.deepspeed_backwards(loss)
 
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
@@ -168,11 +183,16 @@ class CARPCloobTrainer(BaseTrainer):
             loss = self.model.module.cloob(
                 torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
             )
-            self.model.backward(loss)
+            self.deepspeed_backwards(loss)
 
-        self.model.step()
-        # Kevin: Why not accumulation?
-        # it's different with carp.py
+        # Average the model gradients
+        #self.average_gradients()
+
+        # Clipping
+        self.clip_gradients()
+
+        # Step the model
+        self.deepspeed_step()
 
         return {
             "Loss/Train": loss,
@@ -188,7 +208,6 @@ class CARPCloobTrainer(BaseTrainer):
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
         forward_output = self.model(passages, reviews, config)
-        
         # Does gradient accumulation
         self.zero_grad()
 
@@ -202,7 +221,7 @@ class CARPCloobTrainer(BaseTrainer):
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
                 )
 
-            self.scaler.scale(loss).backward()
+            self.torch_backwards(loss)
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
@@ -213,12 +232,15 @@ class CARPCloobTrainer(BaseTrainer):
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
                 )
 
-            self.scaler.scale(loss).backward()
-        # Clipping
-        if self.model.config.grad_clip != -1:
-            self.scaler.unscale_(self.opt)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), config.grad_clip)
+            self.torch_backwards(loss)
 
+        # Average the model gradients
+        #self.average_gradients(1./100.)
+
+        # Clipping
+        self.clip_gradients()
+
+        # Step the model
         self.torch_step()
 
         return {
