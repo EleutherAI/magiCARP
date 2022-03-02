@@ -64,7 +64,7 @@ def get_model(
     if load_checkpoint:
         model.load(ckpt_path)
         print_rank_0("Checkpoint loaded!")
-    model.cuda()
+    model.to(config.model.device)
     if config.train_job.use_half:
         model.half()
     if config.train_job.gradient_checkpointing:
