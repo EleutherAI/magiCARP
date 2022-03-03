@@ -21,12 +21,15 @@ class MLMEncoderOutput(BaseEncoderOutput):
 # Abstract base for a model that can serve both for MLM and encoding
 # Makes assumption that central model is MLM (i.e. it's roberta)
 class MLMEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
         super().forward.__init__(
             model_path=model_path, model_arch=model_arch, skip_init=True
         )
         self.model = RobertaForMaskedLM.from_pretrained(model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if tokenizer_path is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
         # default roberta extract doesnt work
         self.extract_fn = lambda out: out["hidden_states"][-1]
@@ -80,8 +83,8 @@ class MLMEncoder(BaseEncoder):
 # Same as summed text but alternates as being an MLM
 @register_encoder
 class MLMSumTextEncoder(MLMEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch

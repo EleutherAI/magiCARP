@@ -12,6 +12,7 @@ class ModelConfig:
     model_path: str  # info on HF model being used
     model_arch: str  # currently "roberta" or "neo" or "declutr" supported
     encoder_type: str  # "sum", "eot", "multicls", "direct" (for declutr)
+    tokenizer_path: str = None # If this is left none, we'll infer the tokenizer from the model 
     momentum: float = 0.0
     device: str = "cuda:0"
     grad_accum: int = 1

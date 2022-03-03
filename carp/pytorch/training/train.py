@@ -135,7 +135,7 @@ def train(
 
     else:
         opt = madgrad.MADGRAD(
-            model.parameters(),
+            list(filter(lambda x: x.requires_grad, model.parameters())),
             lr=LEARNING_RATE_INIT,
             weight_decay=trainer.train_config.weight_decay,
             eps=trainer.train_config.opt_eps,
@@ -183,7 +183,6 @@ def train(
                 if USE_DEEPSPEED
                 else back_time
             )
-
             # Logging (in terminal and on WANDB)
             timer.hit()
             batch_outputs["Time/Batch"] = back_time

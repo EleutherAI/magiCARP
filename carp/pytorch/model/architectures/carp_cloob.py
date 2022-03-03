@@ -69,8 +69,8 @@ class CARPCloob(BaseModel):
         # Run the normal CARP init since we are skipping it
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(config.model_path, config.model_arch)
-        self.review_encoder = encoder_class(config.model_path, config.model_arch)
+        self.passage_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
+        self.review_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config

@@ -14,8 +14,8 @@ from carp.pytorch.model.encoders import (
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -44,8 +44,8 @@ class SumTextEncoder(BaseEncoder):
 
 @register_encoder
 class EOTTextEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
         # Add eot,pad token to model and tokenizer
         self.tokenizer.add_tokens(["<|endoftext|>"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
@@ -73,8 +73,8 @@ class EOTTextEncoder(BaseEncoder):
 # Adds CLS token to start of string, end of string and middle of string
 @register_encoder
 class MultiCLSEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
         self.tokenizer.add_tokens(["[CLS]"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         self.model.resize_token_embeddings(len(self.tokenizer))
@@ -112,8 +112,8 @@ class MultiCLSEncoder(BaseEncoder):
 
 @register_encoder
 class DirectTextEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -132,8 +132,8 @@ class DirectTextEncoder(BaseEncoder):
 
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
