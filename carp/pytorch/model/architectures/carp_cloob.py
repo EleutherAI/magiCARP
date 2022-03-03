@@ -100,7 +100,7 @@ class CARPCloob(BaseModel):
         super().load(path)
 
     def clamp(self):
-        with torch.no_grad():
+        with no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
             self.hopfield_scale.clamp(self.clamp_min, self.clamp_max)
 
@@ -161,12 +161,13 @@ class CARPCloobTrainer(BaseTrainer):
         reviews: BatchElement,
         config: TrainConfig,
     ):
-        forward_output = self.model(passages, reviews, config)
+        with self.autocast():
+            forward_output = self.model(passages, reviews, config)
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
             loss = self.model.module.cloob(
@@ -177,7 +178,7 @@ class CARPCloobTrainer(BaseTrainer):
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 rev_tmp[index] = self.model.module.encode_reviews(review).hidden
                 # grad _just_ at positions in `index`
             loss = self.model.module.cloob(
@@ -207,14 +208,15 @@ class CARPCloobTrainer(BaseTrainer):
         reviews: BatchElement,
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
-        forward_output = self.model(passages, reviews, config)
+        with self.autocast():
+            forward_output = self.model(passages, reviews, config)
         # Does gradient accumulation
         self.zero_grad()
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
 
                 loss = self.model.cloob(
@@ -225,7 +227,7 @@ class CARPCloobTrainer(BaseTrainer):
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 rev_tmp[index] = self.model.encode_reviews(review).hidden
                 # grad _just_ at positions in `index`
                 loss = self.model.cloob(

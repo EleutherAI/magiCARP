@@ -47,13 +47,14 @@ class TrainConfig:
     # This removes all pass/rev where |pass| < 8 or |rev| < 8 (in chars)
     dupe_protection: bool = True
     hard_dupe_protection: bool = False  # Manually checks all batches for duplicates
-    validation_size: int = 1000
-    use_half: bool = False
-    use_bucket: bool = False
+    validation_size: int = 1000 # Size of the validation set
+    use_half: bool = False # Use half precision (LEGACY)
+    use_bucket: bool = False # Used for LEGACY data pipelines
     opt_eps: float = 1e-4  # Epsilon for optimizer
-    weight_decay: float = 0
-    gradient_checkpointing: bool = False
-    gradient_averaging: bool = False
+    weight_decay: float = 0 # WD for optimizer
+    gradient_checkpointing: bool = False # Pytorch gradient checkpointing
+    gradient_averaging: bool = False # Average the gradients after accumulation
+    mixed_precision: bool = True # Use AMP mixed precision
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

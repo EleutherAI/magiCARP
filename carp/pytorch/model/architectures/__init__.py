@@ -7,6 +7,8 @@ from typing import Dict, Iterable, Tuple
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.cuda.amp import autocast
+from torch import no_grad
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
@@ -129,7 +131,7 @@ class BaseModel(nn.Module):
         y: TensorType[-1, "latent_dim"],
         normalize: bool = False,
     ):
-        with torch.no_grad():
+        with no_grad():
             n = x.shape[0]
             if normalize:
                 x = F.normalize(x)
@@ -173,7 +175,7 @@ class BaseModel(nn.Module):
         return (loss_i + loss_t) / 2
 
     def clamp(self):
-        with torch.no_grad():
+        with no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
 
     @property
@@ -223,7 +225,7 @@ class BaseModel(nn.Module):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with no_grad():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = [self.encode_reviews(r) for r in reviews]
 

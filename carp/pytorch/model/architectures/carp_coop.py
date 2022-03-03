@@ -45,7 +45,7 @@ class PromptLayer(nn.Module):
         self.ctx_dim = ctx_dim
 
         toks = [encoder.call_tokenizer(l) for l in labels]
-        with torch.no_grad():  # not needed?
+        with no_grad():  # not needed?
             toks_embs_masks = [
                 {
                     "input_ids": t["input_ids"],
@@ -151,10 +151,10 @@ class CARPCoOp(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with no_grad(), autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
 
-        with torch.cuda.amp.autocast():
+        with autocast():
             rev_encs = self.encode_reviews()
 
         # if we only need the embeddings, fetch them
@@ -184,7 +184,7 @@ class CARPCoOp(BaseModel):
         Returns:
             loss: Float (without gradient)
         """
-        with torch.no_grad():
+        with no_grad():
             x = F.normalize(x)
             y = F.normalize(y)
             logits = F.softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
@@ -225,7 +225,7 @@ class CARPCoOp(BaseModel):
             list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0
         )
 
-        with torch.no_grad():
+        with no_grad():
             pass_emb, rev_emb = self.calculate_embeddings(passages)
             val_loss = self.CoOp_loss(torch.cat(pass_emb), rev_emb, rev_labels)
             val_acc = self.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
@@ -280,7 +280,7 @@ class CARPCoOpTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
             loss = self.model.module.CoOp_loss(
@@ -319,7 +319,7 @@ class CARPCoOpTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
                 loss = self.model.CoOp_loss(
                     torch.cat(pass_tmp),

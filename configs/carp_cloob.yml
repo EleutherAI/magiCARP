@@ -36,3 +36,4 @@ train_job:
   trainer: "CARPCloobTrainer"
   gradient_checkpointing: false
   gradient_averaging: False
+  mixed_precision: False

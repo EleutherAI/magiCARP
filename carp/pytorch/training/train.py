@@ -142,7 +142,7 @@ def train(
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))
 
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.cuda.amp.GradScaler(trainer.train_config.mixed_precision)
     save_fn = model.module.save if USE_DEEPSPEED else model.save
     trainer.set_train_params(model, opt, scaler, USE_DEEPSPEED)
 

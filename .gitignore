@@ -16,3 +16,6 @@ carp/dataset/train/cache-a5b0849dd9416bdb.arrow
 carp/dataset/train/dataset_info.json
 carp/dataset/train/state.json
 carp/pytorch/data/utils/api_key.txt
+
+pytorch_model.bin
+config.json

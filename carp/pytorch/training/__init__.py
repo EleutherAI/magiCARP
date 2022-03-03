@@ -1,13 +1,14 @@
 from __future__ import annotations
+from functools import partial
 
 import sys
 from abc import abstractmethod
 from typing import Any, Callable, Dict, Tuple
 
 import torch
+from torch import no_grad
 from catalyst.data import DistributedSamplerWrapper
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
@@ -56,6 +57,9 @@ class BaseTrainer(object):
         # Used in determining the denominator for averaging gradients 
         self.backwards_steps_cur = 0
         self.backwards_steps_max = -1
+
+        # autocast method
+        self.autocast = partial(autocast, self.train_config.mixed_precision)
 
     def set_train_params(self, model, opt, scaler, use_deepspeed=False):
         """
@@ -164,7 +168,7 @@ class BaseTrainer(object):
         if self.model.config.grad_clip != -1:
             self.scaler.unscale_(self.opt)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.train_config.grad_clip)
-
+        
     def eval_step(self, dataset):
         """
         Runs a single evaluation step on the model.
@@ -183,7 +187,7 @@ class BaseTrainer(object):
         passages = chunkBatchElement(passages[0], 8)
         reviews = chunkBatchElement(reviews[0], 8)
 
-        with torch.no_grad():
+        with no_grad():
             if self.use_deepspeed:
                 pass_emb, rev_emb = self.model.module.calculate_embeddings(
                     passages, reviews
