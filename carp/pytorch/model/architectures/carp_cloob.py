@@ -71,6 +71,7 @@ class CARPCloob(BaseModel):
         encoder_class = get_encoder(config.encoder_type)
         self.passage_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
         self.review_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
+
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config
@@ -187,7 +188,7 @@ class CARPCloobTrainer(BaseTrainer):
 
         # Average the model gradients
         self.average_gradients()
-
+  
         # Clipping
         self.clip_gradients()
 
