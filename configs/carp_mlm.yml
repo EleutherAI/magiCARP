@@ -5,8 +5,6 @@ model:
   model_path: "roberta-base"
   model_arch: "roberta"
   encoder_type: "MLMSumTextEncoder"
-  grad_clip: -1.0
-  grad_accum: 4
   momentum: 0.0
   device: "cuda"
 
@@ -32,3 +30,5 @@ train_job:
   data_pipeline: "MLMDataPipeline"
   trainer: "CARPMLMTrainer"
   gradient_checkpointing: true
+  grad_clip: -1.0
+  grad_accum: 4

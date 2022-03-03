@@ -52,9 +52,9 @@ class CARPMLM(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with no_grad(), autocast():
+        with no_grad(),self.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
-        with no_grad(), autocast():
+        with no_grad(),self.autocast():
             rev_encs = [self.encode_reviews(r) for r in reviews]
 
         # if we only need the embeddings, fetch them
@@ -97,7 +97,7 @@ class CARPMLM(BaseModel):
         self.zero_grad()
 
         def accum_every_mb(inp: MLMBatchElement, passage: bool = True):
-            with autocast():
+            with self.autocast():
                 if passage:
                     loss = self.encode_passages(inp).loss
                 else:
@@ -124,14 +124,14 @@ class CARPMLM(BaseModel):
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(pass_mbs):
             pass_tmp = pass_encs.copy()
-            with autocast():
+            with self.autocast():
                 pass_tmp[index] = self.encode_passages(passage).hidden
                 loss = self.contrastive_loss(torch.cat(pass_tmp), torch.cat(rev_encs))
             scaler.scale(loss).backward()
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(rev_mbs):
             rev_tmp = rev_encs.copy()  # no_grad
-            with autocast():
+            with self.autocast():
                 rev_tmp[index] = self.encode_reviews(review).hidden
                 # grad _just_ at positions in `index`
                 loss = self.contrastive_loss(torch.cat(pass_encs), torch.cat(rev_tmp))

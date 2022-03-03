@@ -120,7 +120,7 @@ class BaseTrainer(object):
         """
         Executes a single step using the pytorch optimizer.
         """
-        if self.model.accum_step % self.model.config.grad_accum == 0:
+        if self.model.accum_step % self.train_config.grad_accum == 0:
             self.scaler.step(self.opt)
             self.scaler.update()
             self.model.accum_step = 0
@@ -131,7 +131,7 @@ class BaseTrainer(object):
         """
         Executes a single step utilizing the deepspeed optimizer.
         """
-        if self.model.module.accum_step % self.model.module.config.grad_accum == 0:
+        if self.model.module.accum_step % self.train_config.grad_accum == 0:
             self.model.step()
             self.model.module.accum_step = 0
         else:
@@ -142,7 +142,7 @@ class BaseTrainer(object):
         Used to account for gradient accumulations. Accounts for deepspeed accumulation being different.
         """
         if not self.use_deepspeed:
-            if self.model.accum_step % self.model.config.grad_accum == 0:
+            if self.model.accum_step % self.train_config.grad_accum == 0:
                 self.opt.zero_grad()
 
     def average_gradients(self, steps: float = None):
@@ -165,7 +165,7 @@ class BaseTrainer(object):
         """
         Clips the model gradients as according to the train config
         """
-        if self.model.config.grad_clip != -1:
+        if self.train_config.grad_clip != -1:
             self.scaler.unscale_(self.opt)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.train_config.grad_clip)
         

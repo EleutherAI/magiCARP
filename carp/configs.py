@@ -15,9 +15,7 @@ class ModelConfig:
     tokenizer_path: str = None # If this is left none, we'll infer the tokenizer from the model 
     momentum: float = 0.0
     device: str = "cuda:0"
-    grad_accum: int = 1
     model_eps: float = 1.0e-4  # Epsilon to add to logits in contrastive loss
-    grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -55,7 +53,9 @@ class TrainConfig:
     gradient_checkpointing: bool = False # Pytorch gradient checkpointing
     gradient_averaging: bool = False # Average the gradients after accumulation
     mixed_precision: bool = True # Use AMP mixed precision
-
+    grad_accum: int = 1
+    grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
+    
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
         return cls(**config)

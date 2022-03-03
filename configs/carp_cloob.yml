@@ -2,12 +2,9 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "124M_contrastive_HF/"
-  model_arch: "neo"
-  tokenizer_path: "gpt2"
-  encoder_type: "EOTTextEncoder"
-  grad_clip: -1.0
-  grad_accum: 1
+  model_path: "johngiorgi/declutr-base"
+  model_arch: "roberta"
+  encoder_type: "SumTextEncoder"
   momentum: 0.0
   device: "cuda"
 
@@ -35,5 +32,7 @@ train_job:
   data_pipeline: "BaseDataPipeline"
   trainer: "CARPCloobTrainer"
   gradient_checkpointing: false
-  gradient_averaging: False
-  mixed_precision: False
+  gradient_averaging: True
+  mixed_precision: True
+  grad_clip: -1
+  grad_accum: 1

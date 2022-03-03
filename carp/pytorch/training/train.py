@@ -134,7 +134,7 @@ def train(
         scheduler = LambdaLR(opt.optimizer, get_scheduling_func(trainer.train_config))
 
     else:
-        opt = madgrad.MADGRAD(
+        opt = torch.optim.AdamW(
             list(filter(lambda x: x.requires_grad, model.parameters())),
             lr=LEARNING_RATE_INIT,
             weight_decay=trainer.train_config.weight_decay,

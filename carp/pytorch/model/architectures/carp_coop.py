@@ -151,10 +151,10 @@ class CARPCoOp(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with no_grad(), autocast():
+        with no_grad(),self.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
 
-        with autocast():
+        with self.autocast():
             rev_encs = self.encode_reviews()
 
         # if we only need the embeddings, fetch them
@@ -280,7 +280,7 @@ class CARPCoOpTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
             loss = self.model.module.CoOp_loss(
@@ -319,7 +319,7 @@ class CARPCoOpTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
                 loss = self.model.CoOp_loss(
                     torch.cat(pass_tmp),

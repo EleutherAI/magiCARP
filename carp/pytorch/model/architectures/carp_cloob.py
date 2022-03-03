@@ -209,8 +209,7 @@ class CARPCloobTrainer(BaseTrainer):
         reviews: BatchElement,
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
-        with self.autocast():
-            forward_output = self.model(passages, reviews, config)
+        forward_output = self.model(passages, reviews, config)
         # Does gradient accumulation
         self.zero_grad()
 
@@ -220,20 +219,20 @@ class CARPCloobTrainer(BaseTrainer):
             with self.autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
 
-                loss = self.model.cloob(
-                    torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                )
-
+            loss = self.model.cloob(
+                torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
+            )
+            
             self.torch_backwards(loss)
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
             with self.autocast():
                 rev_tmp[index] = self.model.encode_reviews(review).hidden
-                # grad _just_ at positions in `index`
-                loss = self.model.cloob(
-                    torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                )
+            # grad _just_ at positions in `index`
+            loss = self.model.cloob(
+                torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
+            )
 
             self.torch_backwards(loss)
 

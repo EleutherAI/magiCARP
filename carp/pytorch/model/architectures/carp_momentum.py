@@ -106,7 +106,7 @@ class CARPMomentum(BaseModel):
         return_only_embeddings: bool = True,
     ):
         self._momentum_update()
-        with no_grad(), autocast():
+        with no_grad(),self.autocast():
             pass_encs = [self.encode_passages_m(p) for p in passages]
             rev_encs = [self.encode_reviews_m(r) for r in reviews]
 
@@ -167,7 +167,7 @@ class CARPMomentum(BaseModel):
         for index, passage in enumerate(pass_mbs):
             passage, mask = passage
             pass_tmp = pass_encs.copy()
-            with autocast():
+            with self.autocast():
                 pass_tmp[index] = self.encode_passages(
                     passage.to(self.device), mask.to(self.device)
                 )
@@ -186,7 +186,7 @@ class CARPMomentum(BaseModel):
         for index, review in enumerate(rev_mbs):
             review, mask = review
             rev_tmp = rev_encs.copy()  # no_grad
-            with autocast():
+            with self.autocast():
                 rev_tmp[index] = self.encode_reviews(
                     review.to(self.device), mask.to(self.device)
                 )  # grad _just_ at positions in `index`
