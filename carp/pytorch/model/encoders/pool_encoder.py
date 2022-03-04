@@ -152,5 +152,5 @@ class MeanPoolEncoder(BaseEncoder):
     def forward(
         self, x, mask=None, inputs_embeds=False
     ) -> TensorType["batch", "embed_dim"]:
-        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, use_cache=False)
         return BaseEncoderOutput(self.mean_pooling(out, mask))

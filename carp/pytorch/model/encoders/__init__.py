@@ -71,6 +71,7 @@ class BaseEncoder(nn.Module):
                 self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
             # add quote token to model and tokenizer
             self.tokenizer.add_tokens(["[quote]"])
+            self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
             self.model.resize_token_embeddings(len(self.tokenizer))
 
     @property

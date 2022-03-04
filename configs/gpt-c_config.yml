@@ -2,10 +2,10 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "124M_contrastive_HF/"
+  model_path: "355M_contrastive_HF/"
   model_arch: "neo"
   tokenizer_path: "gpt2"
-  encoder_type: "EOTTextEncoder"
+  encoder_type: "MeanPoolEncoder"
   momentum: 0.0
   device: "cuda"
 
@@ -13,15 +13,15 @@ train_job:
   n_ctx: 512
   epochs: 10
   batch_size: 2048
-  microbatch_size: 48
+  microbatch_size: 12
   lr_ramp_steps: 400
   lr_decay_steps: 3366
   opt_eps: 1.0e-6
   weight_decay: 1.0e-6
-  learning_rate_init: 1.0e-4
+  learning_rate_init: 1.0e-3
   learning_rate_target: 0.000006
   log_interval: 2
-  checkpoint_interval: 500
+  checkpoint_interval: 250
   validate_interval: 50
   use_half: false
   do_log: true
@@ -32,7 +32,7 @@ train_job:
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
   trainer: "CARPTrainer"
-  gradient_checkpointing: false
+  gradient_checkpointing: False
   gradient_averaging: False
   mixed_precision: True
   grad_clip: -1

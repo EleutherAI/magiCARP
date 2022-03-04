@@ -142,4 +142,5 @@ class CARPTrainer(BaseTrainer):
         return {
             "Loss/Train": loss,
             "Acc/Forward": forward_output["forward_acc"],
+            "Model/logit_scale": self.model.logit_scale.sum(),
         }

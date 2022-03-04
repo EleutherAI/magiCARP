@@ -65,6 +65,7 @@ class BaseModel(nn.Module):
                 torch.ones([], device=self.config.device)
                 * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
             )
+            self.logit_scale.requires_grad = False
             self.clamp_min = torch.log(
                 torch.tensor([1 / 100], device=self.config.device)
             )
