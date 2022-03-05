@@ -2,7 +2,7 @@ model:
   latent_dim: 2048
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "355M_contrastive_HF/"
+  model_path: "355M_contrastive_HFV2/"
   model_arch: "neo"
   tokenizer_path: "gpt2"
   encoder_type: "CausalMeanPoolEncoder"
@@ -32,7 +32,7 @@ train_job:
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
   trainer: "CARPTrainer"
-  gradient_checkpointing: True
+  gradient_checkpointing: False
   gradient_averaging: False
   mixed_precision: True
   grad_clip: -1

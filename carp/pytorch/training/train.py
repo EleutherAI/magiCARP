@@ -19,7 +19,7 @@ from carp.pytorch.scalability_utils import (
     parse_deepspeed_config,
     print_rank_0,
 )
-from carp.pytorch.training import get_trainer
+from carp.pytorch.training.trainer import get_trainer
 from carp.pytorch.training.utils import print_available_configs
 from carp.util import get_scheduling_func
 

@@ -2,7 +2,7 @@ from carp.pytorch.data import get_datapipeline_names
 from carp.pytorch.model.architectures import get_architecture_names
 from carp.pytorch.model.encoders import get_encoder_names
 from carp.pytorch.scalability_utils import print_rank_0
-from carp.pytorch.training import get_trainer_names
+from carp.pytorch.training.trainer import get_trainer_names
 
 
 def print_available_configs(args):

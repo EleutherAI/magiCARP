@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import LambdaLR, _LRScheduler
 from carp.configs import ModelConfig
 from carp.pytorch.data.mlm_pipeline import MLMBatchElement
 from carp.pytorch.model.architectures import *
-from carp.pytorch.training import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices, get_scheduling_func
 
 # CARP MLM differs from normal CARP since the first epoch will solely use an MLM objective to improve data efficiency.

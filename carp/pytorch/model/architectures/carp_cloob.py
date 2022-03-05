@@ -2,7 +2,7 @@ from typing import List
 
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
-from carp.pytorch.training import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 

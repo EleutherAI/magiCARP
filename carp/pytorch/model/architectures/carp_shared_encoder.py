@@ -3,7 +3,7 @@ from typing import List
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
 from carp.pytorch.model.encoders import get_encoder
-from carp.pytorch.training import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 # Uses only a single encoder for both the passage encoder and critique encoder. Prepends modality specific tokens
