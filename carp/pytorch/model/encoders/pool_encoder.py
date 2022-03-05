@@ -137,10 +137,9 @@ class MeanPoolEncoder(BaseEncoder):
         self,
         model_path: str,
         model_arch: str,
-        tokenizer_path: str = None,
-        skip_init: bool = False,
+        tokenizer_path: str = None
     ):
-        super().__init__(model_path, model_arch, tokenizer_path, skip_init)
+        super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -176,14 +175,9 @@ class MeanPoolEncoder(BaseEncoder):
 @register_encoder
 class CausalMeanPoolEncoder(MeanPoolEncoder):
     def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
-        super().__init__(model_path, model_arch, tokenizer_path, skip_init=True)
-        self.model = AutoModel.from_pretrained(model_path)
-        if tokenizer_path is None:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        super().__init__(model_path, model_arch, tokenizer_path)
+
         # add quote token to model and tokenizer
-        self.tokenizer.add_tokens(["[quote]"])
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
         self.model.resize_token_embeddings(len(self.tokenizer))
 
