@@ -6,9 +6,8 @@ from typing import Dict, Iterable, Tuple
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import nn, no_grad
 from torch.cuda.amp import autocast
-from torch import no_grad
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
@@ -55,8 +54,12 @@ class BaseModel(nn.Module):
         if not skip_init:
             self.config = config
             encoder_class = get_encoder(config.encoder_type)
-            self.passage_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
-            self.review_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
+            self.passage_encoder = encoder_class(
+                config.model_path, config.model_arch, config.tokenizer_path
+            )
+            self.review_encoder = encoder_class(
+                config.model_path, config.model_arch, config.tokenizer_path
+            )
             self.latent_dim = self.config.latent_dim
             self.pass_projector, self.rev_projector = self._make_projection_layers(
                 self.config

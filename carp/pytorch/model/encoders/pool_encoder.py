@@ -4,6 +4,7 @@ from typing import Iterable
 import torch
 import torch.nn.functional as F
 from torchtyping import TensorType
+from transformers import AutoModel, AutoTokenizer
 
 from carp.pytorch.model.encoders import (
     BaseEncoder,
@@ -11,7 +12,6 @@ from carp.pytorch.model.encoders import (
     register_encoder,
 )
 
-from transformers import AutoTokenizer, AutoModel
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
@@ -133,7 +133,13 @@ class DirectTextEncoder(BaseEncoder):
 
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None, skip_init: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        model_arch: str,
+        tokenizer_path: str = None,
+        skip_init: bool = False,
+    ):
         super().__init__(model_path, model_arch, tokenizer_path, skip_init)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
@@ -161,8 +167,11 @@ class MeanPoolEncoder(BaseEncoder):
     def forward(
         self, x, mask=None, inputs_embeds=False, **kwargs
     ) -> TensorType["batch", "embed_dim"]:
-        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs)
+        out = super().forward(
+            x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs
+        )
         return BaseEncoderOutput(self.mean_pooling(out, mask))
+
 
 @register_encoder
 class CausalMeanPoolEncoder(MeanPoolEncoder):
@@ -181,4 +190,6 @@ class CausalMeanPoolEncoder(MeanPoolEncoder):
     def forward(
         self, x, mask=None, inputs_embeds=False
     ) -> TensorType["batch", "embed_dim"]:
-        return super().forward(x=x, mask=mask, inputs_embeds=inputs_embeds, use_cache=False)
+        return super().forward(
+            x=x, mask=mask, inputs_embeds=inputs_embeds, use_cache=False
+        )

@@ -69,25 +69,28 @@ class CARPCloob(BaseModel):
         # Run the normal CARP init since we are skipping it
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
-        self.review_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
+        self.passage_encoder = encoder_class(
+            config.model_path, config.model_arch, config.tokenizer_path
+        )
+        self.review_encoder = encoder_class(
+            config.model_path, config.model_arch, config.tokenizer_path
+        )
 
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config
         )
 
-        self.clamp_min = torch.log(
-            torch.tensor([1 / 100], device=self.config.device)
-        )
+        self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
         # Add cloob specific parameters
         self.hopfield_scale = torch.ones([], device=self.config.device) * torch.log(
             torch.tensor([8], device=self.config.device, requires_grad=False)
         )
-        self.logit_scale = torch.ones([], device=self.config.device) *\
-             torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
+        self.logit_scale = torch.ones([], device=self.config.device) * torch.log(
+            torch.tensor([30], device=self.config.device, requires_grad=False)
+        )
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
@@ -189,7 +192,7 @@ class CARPCloobTrainer(BaseTrainer):
 
         # Average the model gradients
         self.average_gradients()
-  
+
         # Clipping
         self.clip_gradients()
 
@@ -222,7 +225,7 @@ class CARPCloobTrainer(BaseTrainer):
             loss = self.model.cloob(
                 torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
             )
-            
+
             self.torch_backwards(loss)
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):

@@ -57,7 +57,13 @@ class BaseEncoder(nn.Module):
     # For different models, hidden state is returned differently
     extract_fns = {"neo": extract_neo, "roberta": extract_roberta}
 
-    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None, skip_init: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        model_arch: str,
+        tokenizer_path: str = None,
+        skip_init: bool = False,
+    ):
         super().__init__()
         self.extract_fn = self.extract_fns.get(model_arch)
         self.cfg = AutoConfig.from_pretrained(model_path)

@@ -19,8 +19,16 @@ class CARPSharedEncoder(BaseModel):
         super().__init__(config, skip_init=True)
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path)
-        self.review_encoder = encoder_class(config.model_path, config.model_arch, config.tokenizer_path, self.passage_encoder.model, config.tokenizer_path)
+        self.passage_encoder = encoder_class(
+            config.model_path, config.model_arch, config.tokenizer_path
+        )
+        self.review_encoder = encoder_class(
+            config.model_path,
+            config.model_arch,
+            config.tokenizer_path,
+            self.passage_encoder.model,
+            config.tokenizer_path,
+        )
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config
@@ -160,7 +168,7 @@ class CARPSharedEncoderTrainer(BaseTrainer):
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
                 )
             self.torch_backwards(loss)
-            
+
         # Averge gradients
         self.average_gradients()
 

@@ -52,9 +52,9 @@ class CARPMLM(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with no_grad(),self.autocast():
+        with no_grad(), self.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
-        with no_grad(),self.autocast():
+        with no_grad(), self.autocast():
             rev_encs = [self.encode_reviews(r) for r in reviews]
 
         # if we only need the embeddings, fetch them

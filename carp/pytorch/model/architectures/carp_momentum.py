@@ -106,7 +106,7 @@ class CARPMomentum(BaseModel):
         return_only_embeddings: bool = True,
     ):
         self._momentum_update()
-        with no_grad(),self.autocast():
+        with no_grad(), self.autocast():
             pass_encs = [self.encode_passages_m(p) for p in passages]
             rev_encs = [self.encode_reviews_m(r) for r in reviews]
 

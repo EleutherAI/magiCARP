@@ -1,13 +1,13 @@
 from __future__ import annotations
-from functools import partial
 
 import sys
 from abc import abstractmethod
+from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
 import torch
-from torch import no_grad
 from catalyst.data import DistributedSamplerWrapper
+from torch import no_grad
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
@@ -53,8 +53,8 @@ class BaseTrainer(object):
     def __init__(self, train_config: TrainConfig):
         self.train_config = train_config
         self.force_break = False
-        
-        # Used in determining the denominator for averaging gradients 
+
+        # Used in determining the denominator for averaging gradients
         self.backwards_steps_cur = 0
         self.backwards_steps_max = -1
 
@@ -98,8 +98,8 @@ class BaseTrainer(object):
         # Track the number of backwards per step
         self.backwards_steps_cur += 1
         self.backwards_steps_max = max(
-            self.backwards_steps_max,
-            self.backwards_steps_cur)
+            self.backwards_steps_max, self.backwards_steps_cur
+        )
 
     def deepspeed_backwards(self, loss):
         """
@@ -112,9 +112,8 @@ class BaseTrainer(object):
         # Track the number of backwards per step
         self.backwards_steps_cur += 1
         self.backwards_steps_max = max(
-            self.backwards_steps_max,
-            self.backwards_steps_cur)
-
+            self.backwards_steps_max, self.backwards_steps_cur
+        )
 
     def torch_step(self):
         """
@@ -151,15 +150,15 @@ class BaseTrainer(object):
         Args:
             step: The denominator to divide the gradients by
         """
-        # If steps is not passed, just used the estimated number of steps 
+        # If steps is not passed, just used the estimated number of steps
         self.backwards_steps_cur = 0
         if steps is None:
             steps = self.backwards_steps_max
         if self.train_config.gradient_averaging:
-            # Average gradients 
+            # Average gradients
             for parameter in self.model.parameters():
                 if parameter.grad is not None:
-                    parameter.grad /= float(steps)**(0.5)
+                    parameter.grad /= float(steps) ** (0.5)
 
     def clip_gradients(self):
         """
@@ -167,8 +166,10 @@ class BaseTrainer(object):
         """
         if self.train_config.grad_clip != -1:
             self.scaler.unscale_(self.opt)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.train_config.grad_clip)
-        
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.train_config.grad_clip
+            )
+
     def eval_step(self, dataset):
         """
         Runs a single evaluation step on the model.
@@ -270,14 +271,14 @@ class BaseTrainer(object):
         return tokenizer(passage_encoder)
 
 
-#from carp.pytorch.model.architectures.carp import CARPTrainer
-#from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
-#from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
+# from carp.pytorch.model.architectures.carp import CARPTrainer
+# from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
+# from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
 # from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 # from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-#from carp.pytorch.model.architectures.carp_shared_encoder import (
+# from carp.pytorch.model.architectures.carp_shared_encoder import (
 #    CARPSharedEncoderTrainer,
-#)
+# )
 
 
 def get_trainer(name):

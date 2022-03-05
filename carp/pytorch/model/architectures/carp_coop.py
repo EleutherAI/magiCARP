@@ -151,7 +151,7 @@ class CARPCoOp(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with no_grad(),self.autocast():
+        with no_grad(), self.autocast():
             pass_encs = [self.encode_passages(p) for p in passages]
 
         with self.autocast():
@@ -326,7 +326,7 @@ class CARPCoOpTrainer(BaseTrainer):
                     forward_output["rev_encs"],
                     torch.cat(forward_output["rev_labels"]),
                 )
-                
+
             self.torch_backwards(loss)
 
         # Average the model gradients

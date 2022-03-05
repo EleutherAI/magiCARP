@@ -65,7 +65,9 @@ class SharedSumTextEncoder(SharedEncoder):
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -103,7 +105,9 @@ class SharedEOTTextEncoder(SharedEncoder):
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
         # Add eot,pad token to model and tokenizer
         self.tokenizer.add_tokens(["<|endoftext|>"])
@@ -141,7 +145,9 @@ class SharedMultiCLSEncoder(SharedEncoder):
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
         super().__init__(model_path, model_arch)
         self.tokenizer.add_tokens(["[CLS]"])
@@ -190,7 +196,9 @@ class SharedDirectTextEncoder(SharedEncoder):
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -218,7 +226,9 @@ class SharedMeanPoolEncoder(SharedEncoder):
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
