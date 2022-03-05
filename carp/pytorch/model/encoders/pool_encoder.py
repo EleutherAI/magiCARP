@@ -11,6 +11,7 @@ from carp.pytorch.model.encoders import (
     register_encoder,
 )
 
+from transformers import AutoTokenizer, AutoModel
 
 @register_encoder
 class SumTextEncoder(BaseEncoder):
@@ -132,13 +133,21 @@ class DirectTextEncoder(BaseEncoder):
 
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
-        super().__init__(model_path, model_arch, tokenizer_path)
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None, skip_init: bool = False):
+        super().__init__(model_path, model_arch, tokenizer_path, skip_init)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
 
     def mean_pooling(self, model_output, attention_mask):
+        """
+        Uses the attention mask to perform mean pooling over hidden states
+        Args:
+            model_output: Encoder hidden state ~ [bs, seq_len, hidden]
+            attention_mask: Attention mask ~ [bs, seq_len]
+        Returns:
+            Mean pool ~ [bs, hidden]
+        """
         token_embeddings = model_output[
             0
         ]  # First element of model_output contains all token embeddings
@@ -150,7 +159,26 @@ class MeanPoolEncoder(BaseEncoder):
         )
 
     def forward(
+        self, x, mask=None, inputs_embeds=False, **kwargs
+    ) -> TensorType["batch", "embed_dim"]:
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs)
+        return BaseEncoderOutput(self.mean_pooling(out, mask))
+
+@register_encoder
+class CausalMeanPoolEncoder(MeanPoolEncoder):
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
+        super().__init__(model_path, model_arch, tokenizer_path, skip_init=True)
+        self.model = AutoModel.from_pretrained(model_path)
+        if tokenizer_path is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        # add quote token to model and tokenizer
+        self.tokenizer.add_tokens(["[quote]"])
+        self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+        self.model.resize_token_embeddings(len(self.tokenizer))
+
+    def forward(
         self, x, mask=None, inputs_embeds=False
     ) -> TensorType["batch", "embed_dim"]:
-        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, use_cache=False)
-        return BaseEncoderOutput(self.mean_pooling(out, mask))
+        return super().forward(x=x, mask=mask, inputs_embeds=inputs_embeds, use_cache=False)

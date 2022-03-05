@@ -5,7 +5,7 @@ model:
   model_path: "355M_contrastive_HF/"
   model_arch: "neo"
   tokenizer_path: "gpt2"
-  encoder_type: "MeanPoolEncoder"
+  encoder_type: "CausalMeanPoolEncoder"
   momentum: 0.0
   device: "cuda"
 
@@ -18,7 +18,7 @@ train_job:
   lr_decay_steps: 3366
   opt_eps: 1.0e-6
   weight_decay: 1.0e-6
-  learning_rate_init: 1.0e-3
+  learning_rate_init: 1.0e-4
   learning_rate_target: 0.000006
   log_interval: 2
   checkpoint_interval: 250
@@ -32,7 +32,7 @@ train_job:
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
   trainer: "CARPTrainer"
-  gradient_checkpointing: False
+  gradient_checkpointing: True
   gradient_averaging: False
   mixed_precision: True
   grad_clip: -1
