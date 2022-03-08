@@ -110,9 +110,6 @@ class CARPCloob(BaseModel):
         text_features: TensorType[-1, "latent_dim"],
     ) -> TensorType[(), float]:
 
-        image_features = F.normalize(image_features)
-        text_features = F.normalize(text_features)
-
         p_xx, p_yy, p_xy, p_yx = hopfield_retrieval(
             image_features, text_features, self.hopfield_scale
         )
