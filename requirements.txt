@@ -8,3 +8,4 @@ torchtyping==0.1.4
 black==22.1.0
 isort
 flake8
+matplotlib
