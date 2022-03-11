@@ -106,6 +106,15 @@ class CARPSimRefactor(CARP):
 @register_architecture
 class CARPFilip(CARPSimRefactor):
 
+    def item_pseudosimilarity__mode_i_to_mode_j(
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        normalize=False,
+    ):
+        # To do
+        raise NotImplemented
+
     def item_logits__mode_i_to_mode_j(
             self,
             x: TensorType[-1, "latent_dim"],
