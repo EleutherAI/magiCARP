@@ -4,6 +4,7 @@ from carp.pytorch.model.encoders import get_encoder_names
 from carp.pytorch.scalability_utils import print_rank_0
 from carp.pytorch.training.trainer import get_trainer_names
 
+import torch
 
 def print_available_configs(args):
     if args.get_architectures:
@@ -29,7 +30,7 @@ def print_available_configs(args):
     else:
         return False
     return True
-    
+
 # Get parameter groups for model, want to split so that
 # biases dont get weight decay but weights do
 # via: https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
