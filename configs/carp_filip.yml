@@ -4,7 +4,7 @@ model:
   linear_projection: true
   model_path: "haisongzhang/roberta-tiny-cased"
   model_arch: "roberta"
-  encoder_type: "SumTextEncoder"
+  encoder_type: "NaiveTextEncoder"
   grad_clip: -1.0
   grad_accum: 4
   momentum: 0.0
