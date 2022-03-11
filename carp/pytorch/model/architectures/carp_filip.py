@@ -127,12 +127,5 @@ class CARPFilip(CARPSimRefactor):
 
 
 @register_trainer
-class CARPFilipTrainer(BaseTrainer):
-    def train_deepspeed_step(
-        self,
-        passages: BatchElement,
-        reviews: BatchElement,
-        config: TrainConfig,
-    ):
-        return super().train_deepspeed_step()
-    
+class CARPFilipTrainer(CARPTrainer):
+    pass
