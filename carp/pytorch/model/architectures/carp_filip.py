@@ -86,6 +86,21 @@ class CARPSimRefactor(CARP):
         loss_ji = F.cross_entropy(logits_ji, labels)
         return (loss_ij + loss_ji) / 2
 
+    def compute_accuracy(
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        normalize: bool = False,
+    ):
+        with torch.no_grad():
+            n = x.shape[0]
+            labels = torch.arange(n, device=self.config.device)
+            
+            logits_ij = self.item_logits__mode_i_to_mode_j(x,y,normalize)
+            logits_ji = self.item_logits__mode_j_to_mode_i(y,x,normalize)
+            acc_ij = (torch.argmax(logits_ij, dim=1) == labels).sum()
+            acc_ji = (torch.argmax(logits_ji, dim=1) == labels).sum()
+        return (acc_ij + acc_ji) / n / 2
 
 @typechecked
 @register_architecture
