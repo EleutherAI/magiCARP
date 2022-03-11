@@ -23,7 +23,7 @@ from carp.pytorch.training.trainer import get_trainer
 from carp.pytorch.training.utils import print_available_configs
 from carp.util import get_scheduling_func
 
-from utils import make_param_groups
+from carp.pytorch.training.utils import make_param_groups
 
 def get_arguments():
     parser = ArgumentParser()
