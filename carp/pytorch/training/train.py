@@ -23,6 +23,7 @@ from carp.pytorch.training.trainer import get_trainer
 from carp.pytorch.training.utils import print_available_configs
 from carp.util import get_scheduling_func
 
+from utils import make_param_groups
 
 def get_arguments():
     parser = ArgumentParser()
@@ -59,13 +60,19 @@ def sanity_check(args, config):
 
 
 def get_model(
-    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None
+    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None,
+    multi_gpu: bool = False
 ):
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
         model.load(ckpt_path)
         print_rank_0("Checkpoint loaded!")
-    model.cuda()
+    
+    if not multi_gpu:
+        model.to(config.model.device)
+    else: 
+        model.cuda()
+
     if config.train_job.use_half:
         model.half()
     if config.train_job.gradient_checkpointing:
@@ -135,9 +142,9 @@ def train(
 
     else:
         opt = torch.optim.AdamW(
-            list(filter(lambda x: x.requires_grad, model.parameters())),
+            make_param_groups(model, trainer.train_config.weight_decay),
             lr=LEARNING_RATE_INIT,
-            weight_decay=trainer.train_config.weight_decay,
+            betas=(0.9,0.95),
             eps=trainer.train_config.opt_eps,
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))
@@ -270,7 +277,7 @@ if __name__ == "__main__":
             init_process_group(backend="nccl")
             torch.cuda.set_device(torch.distributed.get_rank())
 
-        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path)
+        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path, multi_gpus)
         print_rank_0("N Parameters: " + str(param_count(model)))
 
         # Logging stuff

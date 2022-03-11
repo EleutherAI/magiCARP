@@ -29,3 +29,41 @@ def print_available_configs(args):
     else:
         return False
     return True
+    
+# Get parameter groups for model, want to split so that
+# biases dont get weight decay but weights do
+# via: https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
+def make_param_groups(model, weight_decay):
+    decay = set()
+    no_decay = set()
+
+    # Find all linear layers and put their weights in decay
+    for mn, m in model.named_modules():
+        if isinstance(m, torch.nn.Linear):
+            for pn, p in m.named_parameters():
+                fpn = '%s.%s' % (mn, pn) if mn else pn
+
+                if pn.endswith('weight'):
+                    decay.add(fpn)
+
+    # Add  everything to no decay
+    for pn, p in model.named_parameters():
+        no_decay.add(pn)
+
+    # Remove the exceptions
+    no_decay = no_decay - decay
+
+    # assertions to make sure all params have been accounted for
+    param_dict = {pn : p for pn, p in model.named_parameters()}
+    inter_params = decay & no_decay
+    union_params = decay | no_decay
+
+    assert len(inter_params) == 0 # shouldn't be any in both
+    assert len(param_dict.keys() - union_params) == 0 # shouldn't be any in neither
+
+    optim_groups = [
+        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
+        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0}
+    ]
+
+    return optim_groups
