@@ -6,7 +6,8 @@ from typing import Dict, Iterable, Tuple
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import nn, no_grad
+from torch.cuda.amp import autocast
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
 
@@ -53,8 +54,12 @@ class BaseModel(nn.Module):
         if not skip_init:
             self.config = config
             encoder_class = get_encoder(config.encoder_type)
-            self.passage_encoder = encoder_class(config.model_path, config.model_arch)
-            self.review_encoder = encoder_class(config.model_path, config.model_arch)
+            self.passage_encoder = encoder_class(
+                config.model_path, config.model_arch, config.tokenizer_path
+            )
+            self.review_encoder = encoder_class(
+                config.model_path, config.model_arch, config.tokenizer_path
+            )
             self.latent_dim = self.config.latent_dim
             self.pass_projector, self.rev_projector = self._make_projection_layers(
                 self.config
@@ -63,6 +68,7 @@ class BaseModel(nn.Module):
                 torch.ones([], device=self.config.device)
                 * torch.log(torch.tensor([1 / 0.07], device=self.config.device))
             )
+            self.logit_scale.requires_grad = False
             self.clamp_min = torch.log(
                 torch.tensor([1 / 100], device=self.config.device)
             )
@@ -129,7 +135,7 @@ class BaseModel(nn.Module):
         y: TensorType[-1, "latent_dim"],
         normalize: bool = False,
     ):
-        with torch.no_grad():
+        with no_grad():
             n = x.shape[0]
             if normalize:
                 x = F.normalize(x)
@@ -173,7 +179,7 @@ class BaseModel(nn.Module):
         return (loss_i + loss_t) / 2
 
     def clamp(self):
-        with torch.no_grad():
+        with no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
 
     @property
@@ -223,7 +229,7 @@ class BaseModel(nn.Module):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with no_grad():
             pass_encs = [self.encode_passages(p) for p in passages]
             rev_encs = [self.encode_reviews(r) for r in reviews]
 
