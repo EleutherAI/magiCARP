@@ -95,6 +95,8 @@ def save():
     torch.save(R, "review_encs.pt")
 
 def load():
+    global P
+    global R
     try:
         P = torch.load("passage_encs.pt")
         R = torch.load("review_encs.pt")
@@ -119,15 +121,12 @@ loader = Loader()
 
 from tqdm import tqdm
 
-print(P[0])
 # on 3090 ~45 minutes to do all
 print("Embedding Chunks")
 for (pass_encs, rev_encs) in tqdm(loader):
-    print(pass_encs[0])
-    exit()
     P[i:i + CHUNK_SIZE] = pass_encs
     R[i:i + CHUNK_SIZE] = rev_encs
 
     i+=CHUNK_SIZE
-    #if (i//CHUNK_SIZE) == checkpoint_interval: save()
+    if (i//CHUNK_SIZE) == checkpoint_interval: save()
     if (i//CHUNK_SIZE) >= MAX_CHUNKS and MAX_CHUNKS != -1: break 
