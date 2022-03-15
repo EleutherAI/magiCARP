@@ -32,17 +32,20 @@ def spherical_coord(x):
 # x = array like
 # y = array like same length as x
 # names = list of strings
+# c = list of labels (-1 interpreted as no label)
 # source: https://stackoverflow.com/q/7908636
 def scatter_with_names(x, y, names, c = None):
-    c = np.random.randint(1,5,size=len(x))
     names = np.array(names)
     norm = plt.Normalize(1,4)
     cmap = plt.cm.RdYlGn
     fig, ax = plt.subplots()
-    if c is None:
-        sc = plt.scatter(x, y, cmap = cmap, norm=norm)
-    else:
-        sc = plt.scatter(x, y, c = c, cmap = cmap, norm=norm)
+
+    # Some preprocessing on c
+    if c is None: c = [-1] * len(x)
+    c =  [(0, 0, 0, 1) if c_i == -1 else cmap(c_i) for c_i in c]
+
+    sc = plt.scatter(x, y,s = 2.5, c = c)
+        
     annot = ax.annotate("", xy=(0,0), xytext=(20,20),textcoords="offset points",
                     bbox=dict(boxstyle="round", fc="w"),
                     arrowprops=dict(arrowstyle="->"))
@@ -55,7 +58,9 @@ def scatter_with_names(x, y, names, c = None):
         text = "{}, {}".format(" ".join(list(map(str,ind["ind"]))), 
                                " ".join([names[n] for n in ind["ind"]]))
         annot.set_text(text)
-        annot.get_bbox_patch().set_facecolor(cmap(norm(c[ind["ind"][0]])))
+
+        color = c[ind["ind"][0]]
+        annot.get_bbox_patch().set_facecolor(color)
         annot.get_bbox_patch().set_alpha(0.4)
 
 
