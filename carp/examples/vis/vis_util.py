@@ -33,14 +33,16 @@ def spherical_coord(x):
 # y = array like same length as x
 # names = list of strings
 # source: https://stackoverflow.com/q/7908636
-def scatter_with_names(x, y, names):
+def scatter_with_names(x, y, names, c = None):
     c = np.random.randint(1,5,size=len(x))
     names = np.array(names)
     norm = plt.Normalize(1,4)
     cmap = plt.cm.RdYlGn
     fig, ax = plt.subplots()
-    sc = plt.scatter(x, y, cmap = cmap, norm=norm)
-    
+    if c is None:
+        sc = plt.scatter(x, y, cmap = cmap, norm=norm)
+    else:
+        sc = plt.scatter(x, y, c = c, cmap = cmap, norm=norm)
     annot = ax.annotate("", xy=(0,0), xytext=(20,20),textcoords="offset points",
                     bbox=dict(boxstyle="round", fc="w"),
                     arrowprops=dict(arrowstyle="->"))
