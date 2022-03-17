@@ -17,7 +17,7 @@ from carp.pytorch.model.architectures import (
     typechecked,
 )
 from carp.pytorch.model.architectures.carp import CARP, CARPTrainer
-from carp.pytorch.training import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 from torchtyping import TensorType, patch_typeguard
