@@ -242,10 +242,6 @@ class CARPFilipOLD(CARPSimRefactor):
         y: TensorType["batch_size", -1, "latent_dim"],
         normalize=True,
     ):
-        # To do
-        #logger.debug(x.shape) # [batch_size, N, latent_dim]
-        #logger.debug(y.shape) # [batch_size, M, latent_dim]
-        #raise NotImplementedError
         if normalize:
             x = F.normalize(x)
             y = F.normalize(y)
@@ -261,12 +257,8 @@ class CARPFilipOLD(CARPSimRefactor):
             y: TensorType["batch_size", -1, "latent_dim"],
             normalize=True,
         ):
-        #logger.debug(x.shape) # [batch_size, N, latent_dim]
-        #logger.debug(y.shape)
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
-        #logger.debug(S_ij.shape)
         logits_ij = S_ij * self.logit_scale.exp()
-        #logger.debug(logits_ij.shape)
         return logits_ij.max(dim=-1).values.mean(dim=-1)
 
 
@@ -327,11 +319,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
             config.microbatch_size, 
             shuffle=False
         )
-        #logger.debug(microbatch_inds)
-        logger.debug(type(logit_chunks))
 
         with torch.no_grad():
-            #enc_no_grad = [encoder_no_grad(item).hidden for item in mode_no_grad]
             enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
 
         mbs_w_grad: List[BatchElement] = [
@@ -339,34 +328,23 @@ class CARPSimRefactorTrainer(CARPTrainer):
             for i in microbatch_inds
         ]
 
-        #enc_w_grad = []
-        #logit_chunks = []
         compute_loss = True
         if logit_chunks is None:
             logit_chunks = []
             compute_loss = False
-        #for i in microbatch_inds:
         for i, item in enumerate(mbs_w_grad):
             with torch.cuda.amp.autocast():
-                #item = mbs_w_grad[i]
                 enc_i = encoder_w_grad(item).hidden
-                #enc_w_grad.append(enc_i)
             logits_ij = logits_func(enc_i, enc_no_grad)
             
             if compute_loss:
                 logit_chunks[i] = logits_ij
-                #loss = self.model.module.contrastive_loss(
                 loss = self.model.contrastive_loss(
-                    #torch.cat(pass_tmp), torch.cat(rev_encs)
-                    #torch.cat(logit_chunks), torch.cat(enc_no_grad)
                     torch.cat(logit_chunks), enc_no_grad
                 )
                 f_backwards(loss)
             else:
                 logit_chunks.append(logits_ij)
-
-        #rev_encs = None
-        #pass_mbs = None
         return logit_chunks
 
     def _inner_step(self,
@@ -381,8 +359,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
             logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
                 mode_no_grad=mode_no_grad,
-                #encoder_w_grad=self.model.module.encode_passages,
-                #encoder_no_grad=self.model.module.encode_reviews,
                 encoder_w_grad=self.model.encode_passages,
                 encoder_no_grad=self.model.encode_reviews,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
@@ -397,8 +373,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
         logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
                 mode_no_grad=mode_no_grad,
-                #encoder_w_grad=self.model.module.encode_passages,
-                #encoder_no_grad=self.model.module.encode_reviews,
                 encoder_w_grad=self.model.encode_passages,
                 encoder_no_grad=self.model.encode_reviews,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
@@ -516,7 +490,6 @@ class CARPFilipTrainer(CARPTrainer):
                 passage = pass_mbs[i]
                 pass_tmp_i = self.model.module.encode_passages(passage).hidden
                 pass_temp.append(pass_tmp_i)
-            #loss = self.model.module.contrastive_loss(
             loss = self.model.contrastive_loss(
                 torch.cat(pass_tmp), torch.cat(rev_encs)
             )
@@ -537,10 +510,8 @@ class CARPFilipTrainer(CARPTrainer):
         for i in microbatch_inds:
             with torch.cuda.amp.autocast():
                 review = rev_mbs[i]
-                #rev_tmp_i = self.model.module.encode_passages(review).hidden
                 rev_tmp_i = self.model.encode_passages(review).hidden
                 rev_temp.append(rev_tmp_i)
-            #loss = self.model.module.contrastive_loss(
             loss = self.model.contrastive_loss(
                 torch.cat(rev_tmp), torch.cat(pass_encs)
             )
