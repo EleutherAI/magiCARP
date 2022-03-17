@@ -1,9 +1,10 @@
 import sys
 sys.path.append('.')
 
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 import torch
+from torch import nn
 import torch.nn.functional as F
 
 from carp.configs import ModelConfig
@@ -305,7 +306,169 @@ class CARPFilip(CARPFilipOLD):
         }
 
 @register_trainer
+class CARPSimRefactorTrainer(CARPTrainer):
+
+    def microbatch_up_logits__mode_i_to_mode_j(
+        self,
+        mode_w_grad: BatchElement,
+        mode_no_grad: BatchElement,
+        encoder_w_grad: nn.Module,
+        encoder_no_grad: nn.Module,
+        logits_func: Callable,
+        config: TrainConfig,
+        logit_chunks=None,
+        f_backwards=None,
+    ):
+        microbatch_inds = generate_indices(
+            config.batch_size, config.microbatch_size, shuffle=False
+        )
+
+        with torch.no_grad():
+            enc_no_grad = [encoder_no_grad(item).hidden for item in mode_no_grad]
+
+        mbs_w_grad: List[BatchElement] = [
+            BatchElement(mode_w_grad.input_ids[i], mode_w_grad.mask[i])
+            for i in microbatch_inds
+        ]
+
+        #enc_w_grad = []
+        #logit_chunks = []
+        compute_loss = True
+        if logit_chunks is None:
+            logit_chunks = []
+            compute_loss = False
+        for i in microbatch_inds:
+            with torch.cuda.amp.autocast():
+                item = mbs_w_grad[i]
+                enc_i = encoder_w_grad(item).hidden
+                #enc_w_grad.append(enc_i)
+            logits_ij = logits_func(enc_i, enc_no_grad)
+            #logit_chunks.append(logits_ij)
+            logit_chunks[i] = logits_ij
+            if compute_loss:
+                loss = self.model.module.contrastive_loss(
+                    torch.cat(pass_tmp), torch.cat(rev_encs)
+                )
+                f_backwards(loss)
+        #rev_encs = None
+        #pass_mbs = None
+        return logit_chunks
+
+    def _inner_step(self,
+        mode_w_grad: BatchElement,
+        mode_no_grad: BatchElement,
+        config: TrainConfig,
+        f_backwards=None,
+    ):
+
+        # 1. Build up logits_ij
+        with torch.no_grad():
+            logits_ij = self.microbatch_up_logits__mode_i_to_mode_j(
+                mode_w_grad=mode_w_grad,
+                mode_no_grad=mode_no_grad,
+                encoder_w_grad=self.model.module.encode_passages,
+                encoder_no_grad=self.model.module.encode_reviews,
+                logits_func=self.item_logits__mode_i_to_mode_j,
+                config=config,
+                logit_chunks=None,
+                f_backwards=None,
+            )
+        
+        # 2. Ok, again but this time with grad and loss....
+        logits_ij = self.microbatch_up_logits__mode_i_to_mode_j(
+                mode_w_grad=mode_w_grad,
+                mode_no_grad=mode_no_grad,
+                encoder_w_grad=self.model.module.encode_passages,
+                encoder_no_grad=self.model.module.encode_reviews,
+                logits_func=self.item_logits__mode_i_to_mode_j,
+                config=config,
+                logit_chunks=logits_ij,
+                f_backwards=f_backwards,
+            )
+        
+        return logits_ij
+    
+    def train_deepspeed_step(
+        self,
+        passages: BatchElement,
+        reviews: BatchElement,
+        config: TrainConfig,
+    ):
+        with self.autocast():
+            logits_ij = self._inner_step(
+                mode_w_grad=passages,
+                mode_no_grad=reviews,
+                config=config,
+                f_backwards= self.deepspeed_backwards,
+            )
+        
+            logits_ji = self._inner_step(
+                mode_w_grad=reviews,
+                mode_no_grad=passages,
+                config=config,
+                f_backwards= self.deepspeed_backwards,
+            )
+        
+        self.average_gradients()
+        self.clip_gradients()
+        self.deepspeed_step()
+
+        with torch.no_grad():
+            loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+
+        return {
+            "Loss/Train": loss,
+            "Acc/Forward": acc,
+        }
+
+
+    def train_torch_step(
+        self,
+        passages: BatchElement,
+        reviews: BatchElement,
+        config: TrainConfig,
+    ):
+        self.zero_grad()
+        with self.autocast():
+            logits_ij = self._inner_step(
+                mode_w_grad=passages,
+                mode_no_grad=reviews,
+                config=config,
+                f_backwards= self.torch_backwards,
+            )
+        
+            logits_ji = self._inner_step(
+                mode_w_grad=reviews,
+                mode_no_grad=passages,
+                config=config,
+                f_backwards= self.torch_backwards,
+            )
+        
+        self.average_gradients()
+        self.clip_gradients()
+        self.torch_step()
+
+        with torch.no_grad():
+            loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+
+        return {
+            "Loss/Train": loss,
+            "Acc/Forward": acc,
+            "Model/logit_scale": self.model.logit_scale.sum(),
+        }
+
+
+
+
+
+
+
+
+@register_trainer
 class CARPFilipTrainer(CARPTrainer):
+
     def train_deepspeed_step(
         self,
         passages: BatchElement,
