@@ -65,7 +65,8 @@ class CARPSimRefactor(CARP):
         x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"],
         normalize=False,
-    ) -> TensorType["batch_size", "batch_size"]:
+    #) -> TensorType["batch_size", "batch_size"]:
+    ) -> TensorType:
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
         return S_ij * self.logit_scale.exp()
     
@@ -74,7 +75,8 @@ class CARPSimRefactor(CARP):
         y, #: TensorType[-1, "latent_dim"],
         x, #: TensorType[-1, "latent_dim"],
         normalize=False,
-        ) -> TensorType["batch_size", "batch_size"]:
+        #) -> TensorType["batch_size", "batch_size"]:
+        ) -> TensorType:
         return self.item_logits__mode_i_to_mode_j(y,x,normalize)
 
     def _compute_loss_or_acc(
@@ -320,11 +322,17 @@ class CARPSimRefactorTrainer(CARPTrainer):
         f_backwards=None,
     ):
         microbatch_inds = generate_indices(
-            config.batch_size, config.microbatch_size, shuffle=False
+            config.batch_size, 
+            #mode_w_grad.input_ids.shape[0],
+            config.microbatch_size, 
+            shuffle=False
         )
+        #logger.debug(microbatch_inds)
+        logger.debug(type(logit_chunks))
 
         with torch.no_grad():
-            enc_no_grad = [encoder_no_grad(item).hidden for item in mode_no_grad]
+            #enc_no_grad = [encoder_no_grad(item).hidden for item in mode_no_grad]
+            enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
 
         mbs_w_grad: List[BatchElement] = [
             BatchElement(mode_w_grad.input_ids[i], mode_w_grad.mask[i])
@@ -337,19 +345,26 @@ class CARPSimRefactorTrainer(CARPTrainer):
         if logit_chunks is None:
             logit_chunks = []
             compute_loss = False
-        for i in microbatch_inds:
+        #for i in microbatch_inds:
+        for i, item in enumerate(mbs_w_grad):
             with torch.cuda.amp.autocast():
-                item = mbs_w_grad[i]
+                #item = mbs_w_grad[i]
                 enc_i = encoder_w_grad(item).hidden
                 #enc_w_grad.append(enc_i)
             logits_ij = logits_func(enc_i, enc_no_grad)
-            #logit_chunks.append(logits_ij)
-            logit_chunks[i] = logits_ij
+            
             if compute_loss:
-                loss = self.model.module.contrastive_loss(
-                    torch.cat(pass_tmp), torch.cat(rev_encs)
+                logit_chunks[i] = logits_ij
+                #loss = self.model.module.contrastive_loss(
+                loss = self.model.contrastive_loss(
+                    #torch.cat(pass_tmp), torch.cat(rev_encs)
+                    #torch.cat(logit_chunks), torch.cat(enc_no_grad)
+                    torch.cat(logit_chunks), enc_no_grad
                 )
                 f_backwards(loss)
+            else:
+                logit_chunks.append(logits_ij)
+
         #rev_encs = None
         #pass_mbs = None
         return logit_chunks
@@ -363,30 +378,36 @@ class CARPSimRefactorTrainer(CARPTrainer):
 
         # 1. Build up logits_ij
         with torch.no_grad():
-            logits_ij = self.microbatch_up_logits__mode_i_to_mode_j(
+            logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
                 mode_no_grad=mode_no_grad,
-                encoder_w_grad=self.model.module.encode_passages,
-                encoder_no_grad=self.model.module.encode_reviews,
-                logits_func=self.item_logits__mode_i_to_mode_j,
+                #encoder_w_grad=self.model.module.encode_passages,
+                #encoder_no_grad=self.model.module.encode_reviews,
+                encoder_w_grad=self.model.encode_passages,
+                encoder_no_grad=self.model.encode_reviews,
+                logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
                 logit_chunks=None,
                 f_backwards=None,
             )
+        logger.debug(type(logits_chunks_ij))
+        logger.debug(len(logits_chunks_ij))
         
         # 2. Ok, again but this time with grad and loss....
-        logits_ij = self.microbatch_up_logits__mode_i_to_mode_j(
+        logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
                 mode_no_grad=mode_no_grad,
-                encoder_w_grad=self.model.module.encode_passages,
-                encoder_no_grad=self.model.module.encode_reviews,
-                logits_func=self.item_logits__mode_i_to_mode_j,
+                #encoder_w_grad=self.model.module.encode_passages,
+                #encoder_no_grad=self.model.module.encode_reviews,
+                encoder_w_grad=self.model.encode_passages,
+                encoder_no_grad=self.model.encode_reviews,
+                logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                logit_chunks=logits_ij,
+                logit_chunks=logits_chunks_ij,
                 f_backwards=f_backwards,
             )
         
-        return logits_ij
+        return logits_chunks_ij
     
     def train_deepspeed_step(
         self,
@@ -495,7 +516,8 @@ class CARPFilipTrainer(CARPTrainer):
                 passage = pass_mbs[i]
                 pass_tmp_i = self.model.module.encode_passages(passage).hidden
                 pass_temp.append(pass_tmp_i)
-            loss = self.model.module.contrastive_loss(
+            #loss = self.model.module.contrastive_loss(
+            loss = self.model.contrastive_loss(
                 torch.cat(pass_tmp), torch.cat(rev_encs)
             )
             self.deepspeed_backwards(loss)
@@ -515,9 +537,11 @@ class CARPFilipTrainer(CARPTrainer):
         for i in microbatch_inds:
             with torch.cuda.amp.autocast():
                 review = rev_mbs[i]
-                rev_tmp_i = self.model.module.encode_passages(review).hidden
+                #rev_tmp_i = self.model.module.encode_passages(review).hidden
+                rev_tmp_i = self.model.encode_passages(review).hidden
                 rev_temp.append(rev_tmp_i)
-            loss = self.model.module.contrastive_loss(
+            #loss = self.model.module.contrastive_loss(
+            loss = self.model.contrastive_loss(
                 torch.cat(rev_tmp), torch.cat(pass_encs)
             )
             self.deepspeed_backwards(loss)
