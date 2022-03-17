@@ -70,7 +70,7 @@ class CARPTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = list(all_pass_encs.clone().split(config.microbatch_size))
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 micro_batch = self.model.module.encode_passages(passage).hidden
                 pass_tmp[pass_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
@@ -81,7 +81,7 @@ class CARPTrainer(BaseTrainer):
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = list(all_rev_encs.clone().split(config.microbatch_size))
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 micro_batch = self.model.module.encode_reviews(review).hidden
                 rev_tmp[rev_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
