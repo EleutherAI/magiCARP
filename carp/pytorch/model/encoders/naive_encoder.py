@@ -14,8 +14,8 @@ from carp.pytorch.model.encoders import (
 
 @register_encoder
 class NaiveTextEncoder(BaseEncoder):
-    def __init__(self, model_path: str, model_arch: str):
-        super().__init__(model_path, model_arch)
+    #def __init__(self, model_path: str, model_arch: str):
+    #    super().__init__(model_path, model_arch)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
