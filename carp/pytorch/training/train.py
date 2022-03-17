@@ -262,9 +262,9 @@ if __name__ == "__main__":
         sanity_check(args, config)
         args.deepspeed_config = parse_deepspeed_config(
             args,
-            trainer.train_config,
-            lr=trainer.train_config.learning_rate_init,
-            weight_decay=0,
+            train_config,
+            lr=train_config.learning_rate_init,
+            weight_decay=train_config.weight_decay,
         )
 
         multi_gpus = (
