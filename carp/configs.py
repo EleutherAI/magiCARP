@@ -12,11 +12,12 @@ class ModelConfig:
     model_path: str  # info on HF model being used
     model_arch: str  # currently "roberta" or "neo" or "declutr" supported
     encoder_type: str  # "sum", "eot", "multicls", "direct" (for declutr)
+    tokenizer_path: str = (
+        None  # If this is left none, we'll infer the tokenizer from the model
+    )
     momentum: float = 0.0
     device: str = "cuda:0"
-    grad_accum: int = 1
     model_eps: float = 1.0e-4  # Epsilon to add to logits in contrastive loss
-    grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -46,11 +47,16 @@ class TrainConfig:
     # This removes all pass/rev where |pass| < 8 or |rev| < 8 (in chars)
     dupe_protection: bool = True
     hard_dupe_protection: bool = False  # Manually checks all batches for duplicates
-    validation_size: int = 1000
-    use_half: bool = False
-    use_bucket: bool = False
+    validation_size: int = 1000  # Size of the validation set
+    use_half: bool = False  # Use half precision (LEGACY)
+    use_bucket: bool = False  # Used for LEGACY data pipelines
     opt_eps: float = 1e-4  # Epsilon for optimizer
-    gradient_checkpointing: bool = False
+    weight_decay: float = 0  # WD for optimizer
+    gradient_checkpointing: bool = False  # Pytorch gradient checkpointing
+    gradient_averaging: bool = False  # Average the gradients after accumulation
+    mixed_precision: bool = True  # Use AMP mixed precision
+    grad_accum: int = 1
+    grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

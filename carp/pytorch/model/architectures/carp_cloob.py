@@ -2,7 +2,7 @@ from typing import List
 
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
-from carp.pytorch.training import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
 
@@ -69,8 +69,13 @@ class CARPCloob(BaseModel):
         # Run the normal CARP init since we are skipping it
         self.config = config
         encoder_class = get_encoder(config.encoder_type)
-        self.passage_encoder = encoder_class(config.model_path, config.model_arch)
-        self.review_encoder = encoder_class(config.model_path, config.model_arch)
+        self.passage_encoder = encoder_class(
+            config.model_path, config.model_arch, config.tokenizer_path
+        )
+        self.review_encoder = encoder_class(
+            config.model_path, config.model_arch, config.tokenizer_path
+        )
+
         self.latent_dim = self.config.latent_dim
         self.pass_projector, self.rev_projector = self._make_projection_layers(
             self.config
@@ -99,7 +104,7 @@ class CARPCloob(BaseModel):
         super().load(path)
 
     def clamp(self):
-        with torch.no_grad():
+        with no_grad():
             self.logit_scale.clamp(self.clamp_min, self.clamp_max)
             self.hopfield_scale.clamp(self.clamp_min, self.clamp_max)
 
@@ -160,12 +165,13 @@ class CARPCloobTrainer(BaseTrainer):
         reviews: BatchElement,
         config: TrainConfig,
     ):
-        forward_output = self.model(passages, reviews, config)
+        with self.autocast():
+            forward_output = self.model(passages, reviews, config)
 
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
             loss = self.model.module.cloob(
@@ -176,7 +182,7 @@ class CARPCloobTrainer(BaseTrainer):
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 rev_tmp[index] = self.model.module.encode_reviews(review).hidden
                 # grad _just_ at positions in `index`
             loss = self.model.module.cloob(
@@ -185,7 +191,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.deepspeed_backwards(loss)
 
         # Average the model gradients
-        # self.average_gradients()
+        self.average_gradients()
 
         # Clipping
         self.clip_gradients()
@@ -213,28 +219,28 @@ class CARPCloobTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
 
-                loss = self.model.cloob(
-                    torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                )
+            loss = self.model.cloob(
+                torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
+            )
 
             self.torch_backwards(loss)
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
             rev_tmp = forward_output["rev_encs"].copy()  # no_grad
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 rev_tmp[index] = self.model.encode_reviews(review).hidden
-                # grad _just_ at positions in `index`
-                loss = self.model.cloob(
-                    torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                )
+            # grad _just_ at positions in `index`
+            loss = self.model.cloob(
+                torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
+            )
 
             self.torch_backwards(loss)
 
         # Average the model gradients
-        # self.average_gradients(1./100.)
+        self.average_gradients()
 
         # Clipping
         self.clip_gradients()

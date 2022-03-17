@@ -4,7 +4,12 @@ from typing import Iterable, List
 import torch
 import torch.nn.functional as F
 from torchtyping import TensorType
-from transformers import AutoModel, AutoTokenizer, PreTrainedModel
+from transformers import (
+    AutoModel,
+    AutoTokenizer,
+    PretrainedBartModel,
+    PreTrainedModel,
+)
 
 from carp.pytorch.model.encoders import (
     BaseEncoder,
@@ -18,6 +23,7 @@ class SharedEncoder(BaseEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
@@ -27,7 +33,10 @@ class SharedEncoder(BaseEncoder):
         self.is_review_encoder = is_review_encoder
         # each component of the shared encoder will have its own tokenizer
         # since too much of the data pipeline depends on this
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if tokenizer_path is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         # add quote token to model and tokenizer
         self.tokenizer.add_tokens(["[quote]", "[story]", "[critique]"])
 
@@ -56,11 +65,14 @@ class SharedSumTextEncoder(SharedEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -93,11 +105,14 @@ class SharedEOTTextEncoder(SharedEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
         # Add eot,pad token to model and tokenizer
         self.tokenizer.add_tokens(["<|endoftext|>"])
@@ -130,11 +145,14 @@ class SharedMultiCLSEncoder(SharedEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
         super().__init__(model_path, model_arch)
         self.tokenizer.add_tokens(["[CLS]"])
@@ -178,11 +196,14 @@ class SharedDirectTextEncoder(SharedEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -205,11 +226,14 @@ class SharedMeanPoolEncoder(SharedEncoder):
         self,
         model_path: str,
         model_arch: str,
+        tokenizer_path: str = None,
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
 
-        super().__init__(model_path, model_arch, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return super().preprocess(string_batch)
@@ -226,7 +250,31 @@ class SharedMeanPoolEncoder(SharedEncoder):
         )
 
     def forward(
+        self, x, mask=None, inputs_embeds=False, **kwargs
+    ) -> TensorType["batch", "embed_dim"]:
+        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs)
+        return BaseEncoderOutput(self.mean_pooling(out, mask))
+
+
+@register_encoder
+class CausalSharedMeanPoolEncoder(SharedMeanPoolEncoder):
+    def __init__(
+        self,
+        model_path: str,
+        model_arch: str,
+        tokenizer_path: str = None,
+        model: PreTrainedModel = None,
+        is_review_encoder: bool = False,
+    ):
+        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+
+        # add quote token to model and tokenizer
+        self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+        self.model.resize_token_embeddings(len(self.tokenizer))
+
+    def forward(
         self, x, mask=None, inputs_embeds=False
     ) -> TensorType["batch", "embed_dim"]:
-        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
-        return BaseEncoderOutput(self.mean_pooling(out, mask))
+        return super().forward(
+            x=x, mask=mask, inputs_embeds=inputs_embeds, use_cache=False
+        )

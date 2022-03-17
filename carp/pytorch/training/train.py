@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import deepspeed
+import madgrad
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import Subset, random_split
@@ -18,10 +19,11 @@ from carp.pytorch.scalability_utils import (
     parse_deepspeed_config,
     print_rank_0,
 )
-from carp.pytorch.training import get_trainer
+from carp.pytorch.training.trainer import get_trainer
 from carp.pytorch.training.utils import print_available_configs
 from carp.util import get_scheduling_func
 
+from carp.pytorch.training.utils import make_param_groups
 
 def get_arguments():
     parser = ArgumentParser()
@@ -58,13 +60,19 @@ def sanity_check(args, config):
 
 
 def get_model(
-    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None
+    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None,
+    multi_gpu: bool = False
 ):
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
         model.load(ckpt_path)
         print_rank_0("Checkpoint loaded!")
-    model.cuda()
+    
+    if not multi_gpu:
+        model.to(config.model.device)
+    else: 
+        model.cuda()
+
     if config.train_job.use_half:
         model.half()
     if config.train_job.gradient_checkpointing:
@@ -134,14 +142,14 @@ def train(
 
     else:
         opt = torch.optim.AdamW(
-            model.parameters(),
+            make_param_groups(model, trainer.train_config.weight_decay),
             lr=LEARNING_RATE_INIT,
-            weight_decay=0,
+            betas=(0.9,0.95),
             eps=trainer.train_config.opt_eps,
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))
 
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.cuda.amp.GradScaler(trainer.train_config.mixed_precision)
     save_fn = model.module.save if USE_DEEPSPEED else model.save
     trainer.set_train_params(model, opt, scaler, USE_DEEPSPEED)
 
@@ -182,7 +190,6 @@ def train(
                 if USE_DEEPSPEED
                 else back_time
             )
-
             # Logging (in terminal and on WANDB)
             timer.hit()
             batch_outputs["Time/Batch"] = back_time
@@ -273,7 +280,7 @@ if __name__ == "__main__":
             init_process_group(backend="nccl")
             torch.cuda.set_device(torch.distributed.get_rank())
 
-        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path)
+        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path, multi_gpus)
         print_rank_0("N Parameters: " + str(param_count(model)))
 
         # Logging stuff

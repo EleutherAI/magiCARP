@@ -50,7 +50,7 @@ class CARPMomentum(BaseModel):
         self, pass_embeds, rev_embeds, pass_embeds_m, rev_embeds_m
     ):
         # Second half stolen shamelessly from Salesforce ALBEF: https://github.com/salesforce/ALBEF/blob/main/models/model_pretrain.py
-        with torch.no_grad():
+        with no_grad():
             pass_embeds = F.normalize(torch.cat(pass_embeds))
             rev_embeds = F.normalize(torch.cat(rev_embeds))
             pass_embeds_m = F.normalize(pass_embeds_m)
@@ -106,7 +106,7 @@ class CARPMomentum(BaseModel):
         return_only_embeddings: bool = True,
     ):
         self._momentum_update()
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with no_grad(), self.autocast():
             pass_encs = [self.encode_passages_m(p) for p in passages]
             rev_encs = [self.encode_reviews_m(r) for r in reviews]
 
@@ -117,7 +117,7 @@ class CARPMomentum(BaseModel):
 
         return torch.cat(pass_encs), torch.cat(rev_encs)
 
-    @torch.no_grad()
+    @no_grad()
     def copy_params(self):
         # Copied from Salesforce ALBEF: https://github.com/salesforce/ALBEF/blob/main/models/model_pretrain.py
         for model_pair in self.model_pairs:
@@ -127,7 +127,7 @@ class CARPMomentum(BaseModel):
                 param_m.data.copy_(param.data)  # initialize
                 param_m.requires_grad = False  # not update by gradient
 
-    @torch.no_grad()
+    @no_grad()
     def _momentum_update(self):
         # Copied from Salesforce ALBEF: https://github.com/salesforce/ALBEF/blob/main/models/model_pretrain.py
         for model_pair in self.model_pairs:
@@ -167,7 +167,7 @@ class CARPMomentum(BaseModel):
         for index, passage in enumerate(pass_mbs):
             passage, mask = passage
             pass_tmp = pass_encs.copy()
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 pass_tmp[index] = self.encode_passages(
                     passage.to(self.device), mask.to(self.device)
                 )
@@ -186,7 +186,7 @@ class CARPMomentum(BaseModel):
         for index, review in enumerate(rev_mbs):
             review, mask = review
             rev_tmp = rev_encs.copy()  # no_grad
-            with torch.cuda.amp.autocast():
+            with self.autocast():
                 rev_tmp[index] = self.encode_reviews(
                     review.to(self.device), mask.to(self.device)
                 )  # grad _just_ at positions in `index`
