@@ -77,8 +77,8 @@ class CARPSimRefactor(CARP):
 
     def contrastive_loss(
         self, 
-        x: TensorType[-1, "latent_dim"], 
-        y: TensorType[-1, "latent_dim"],
+        x, #: TensorType[-1, "latent_dim"], 
+        y, #: TensorType[-1, "latent_dim"],
         normalize=False,
     ) -> TensorType[(), float]:
 
@@ -92,10 +92,11 @@ class CARPSimRefactor(CARP):
         loss_ji = F.cross_entropy(logits_ji, labels)
         return (loss_ij + loss_ji) / 2
 
+    # Is there a way we can inherit the typing from a method's output?
     def compute_accuracy(
         self,
-        x: TensorType[-1, "latent_dim"],
-        y: TensorType[-1, "latent_dim"],
+        x, #: TensorType[-1, "latent_dim"],
+        y, #: TensorType[-1, "latent_dim"],
         normalize: bool = False,
     ):
         with torch.no_grad():
@@ -114,21 +115,27 @@ class CARPFilip(CARPSimRefactor):
 
     def item_pseudosimilarity__mode_i_to_mode_j(
         self,
-        x: TensorType[-1, "latent_dim"],
-        y: TensorType[-1, "latent_dim"],
+        x: TensorType["batch_size", -1, "latent_dim"],
+        y: TensorType["batch_size", -1, "latent_dim"],
         normalize=False,
     ):
         # To do
-        raise NotImplemented
+        #logger.debug(x.shape) # [batch_size, N, latent_dim]
+        #logger.debug(y.shape) # [batch_size, M, latent_dim]
+        raise NotImplementedError
 
     def item_logits__mode_i_to_mode_j(
             self,
-            x: TensorType[-1, "latent_dim"],
-            y: TensorType[-1, "latent_dim"],
+            x: TensorType["batch_size", -1, "latent_dim"],
+            y: TensorType["batch_size", -1, "latent_dim"],
             normalize=False,
         ):
+        logger.debug(x.shape) # [batch_size, N, latent_dim]
+        logger.debug(y.shape)
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
+        logger.debug(S_ij.shape)
         logits_ij = S_ij * self.logit_scale.exp()
+        logger.debug(logits_ij.shape)
         return logits_ij.max(dim=-1)[0].mean(dim=-1)
 
 
