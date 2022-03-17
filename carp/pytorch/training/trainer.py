@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import sys
 from abc import abstractmethod
-from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
 import torch
+import torch.distributed as dist
 from catalyst.data import DistributedSamplerWrapper
-from torch import no_grad
-from torch.cuda.amp import autocast
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
@@ -58,8 +58,14 @@ class BaseTrainer(object):
         self.backwards_steps_cur = 0
         self.backwards_steps_max = -1
 
-        # autocast method
-        self.autocast = partial(autocast, self.train_config.mixed_precision)
+    def contrastive_parallel_all_gather(self, encs):
+        encs = torch.cat(encs)
+        all_encs_across_gpus = [
+            torch.empty_like(encs) for _ in range(dist.get_world_size())
+        ]
+        dist.all_gather(all_encs_across_gpus, encs)
+        offset = dist.get_rank() * encs.size(0) // self.train_config.microbatch_size
+        return encs, torch.cat(all_encs_across_gpus), offset
 
     def set_train_params(self, model, opt, scaler, use_deepspeed=False):
         """
@@ -119,7 +125,7 @@ class BaseTrainer(object):
         """
         Executes a single step using the pytorch optimizer.
         """
-        if self.model.accum_step % self.train_config.grad_accum == 0:
+        if self.model.accum_step % self.model.config.grad_accum == 0:
             self.scaler.step(self.opt)
             self.scaler.update()
             self.model.accum_step = 0
@@ -130,7 +136,7 @@ class BaseTrainer(object):
         """
         Executes a single step utilizing the deepspeed optimizer.
         """
-        if self.model.module.accum_step % self.train_config.grad_accum == 0:
+        if self.model.module.accum_step % self.model.module.config.grad_accum == 0:
             self.model.step()
             self.model.module.accum_step = 0
         else:
@@ -141,7 +147,7 @@ class BaseTrainer(object):
         Used to account for gradient accumulations. Accounts for deepspeed accumulation being different.
         """
         if not self.use_deepspeed:
-            if self.model.accum_step % self.train_config.grad_accum == 0:
+            if self.model.accum_step % self.model.config.grad_accum == 0:
                 self.opt.zero_grad()
 
     def average_gradients(self, steps: float = None):
@@ -154,17 +160,17 @@ class BaseTrainer(object):
         self.backwards_steps_cur = 0
         if steps is None:
             steps = self.backwards_steps_max
-        if self.train_config.gradient_averaging:
-            # Average gradients
-            for parameter in self.model.parameters():
-                if parameter.grad is not None:
-                    parameter.grad /= float(steps) ** (0.5)
+
+        # Average gradients
+        for parameter in self.model.parameters():
+            if parameter.grad is not None:
+                parameter.grad /= float(steps) ** (0.5)
 
     def clip_gradients(self):
         """
         Clips the model gradients as according to the train config
         """
-        if self.train_config.grad_clip != -1:
+        if self.model.config.grad_clip != -1:
             self.scaler.unscale_(self.opt)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.train_config.grad_clip
@@ -188,7 +194,7 @@ class BaseTrainer(object):
         passages = chunkBatchElement(passages[0], 8)
         reviews = chunkBatchElement(reviews[0], 8)
 
-        with no_grad():
+        with torch.no_grad():
             if self.use_deepspeed:
                 pass_emb, rev_emb = self.model.module.calculate_embeddings(
                     passages, reviews
@@ -241,7 +247,11 @@ class BaseTrainer(object):
         pass
 
     def construct_dataloader(
-        self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
+        self,
+        dataset: BaseDataPipeline,
+        tokenizer: Callable,
+        multi_gpus: bool,
+        is_train: bool,
     ) -> DataLoader:
         sampler = RandomSampler(dataset)
 
@@ -256,6 +266,7 @@ class BaseTrainer(object):
             batch_size=self.train_config.batch_size,
             sampler=sampler,
             collate_fn=tokenizer,
+            drop_last=True if self.use_deepspeed and is_train else False,
         )
 
     def construct_tokenizer(self, passage_encoder: BaseEncoder) -> Callable:
@@ -271,14 +282,15 @@ class BaseTrainer(object):
         return tokenizer(passage_encoder)
 
 
-# from carp.pytorch.model.architectures.carp import CARPTrainer
-# from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
-# from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
+from carp.pytorch.model.architectures.carp import CARPTrainer
+from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
+from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
+
 # from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 # from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
-# from carp.pytorch.model.architectures.carp_shared_encoder import (
-#    CARPSharedEncoderTrainer,
-# )
+from carp.pytorch.model.architectures.carp_shared_encoder import (
+    CARPSharedEncoderTrainer,
+)
 
 
 def get_trainer(name):
