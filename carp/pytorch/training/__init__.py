@@ -5,6 +5,7 @@ from abc import abstractmethod
 from typing import Any, Callable, Dict, Tuple
 
 import torch
+import torch.distributed as dist
 from catalyst.data import DistributedSamplerWrapper
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
@@ -52,10 +53,19 @@ class BaseTrainer(object):
     def __init__(self, train_config: TrainConfig):
         self.train_config = train_config
         self.force_break = False
-        
-        # Used in determining the denominator for averaging gradients 
+
+        # Used in determining the denominator for averaging gradients
         self.backwards_steps_cur = 0
         self.backwards_steps_max = -1
+
+    def contrastive_parallel_all_gather(self, encs):
+        encs = torch.cat(encs)
+        all_encs_across_gpus = [
+            torch.empty_like(encs) for _ in range(dist.get_world_size())
+        ]
+        dist.all_gather(all_encs_across_gpus, encs)
+        offset = dist.get_rank() * encs.size(0) // self.train_config.microbatch_size
+        return encs, torch.cat(all_encs_across_gpus), offset
 
     def set_train_params(self, model, opt, scaler, use_deepspeed=False):
         """
@@ -94,8 +104,8 @@ class BaseTrainer(object):
         # Track the number of backwards per step
         self.backwards_steps_cur += 1
         self.backwards_steps_max = max(
-            self.backwards_steps_max,
-            self.backwards_steps_cur)
+            self.backwards_steps_max, self.backwards_steps_cur
+        )
 
     def deepspeed_backwards(self, loss):
         """
@@ -108,9 +118,8 @@ class BaseTrainer(object):
         # Track the number of backwards per step
         self.backwards_steps_cur += 1
         self.backwards_steps_max = max(
-            self.backwards_steps_max,
-            self.backwards_steps_cur)
-
+            self.backwards_steps_max, self.backwards_steps_cur
+        )
 
     def torch_step(self):
         """
@@ -147,15 +156,15 @@ class BaseTrainer(object):
         Args:
             step: The denominator to divide the gradients by
         """
-        # If steps is not passed, just used the estimated number of steps 
+        # If steps is not passed, just used the estimated number of steps
         self.backwards_steps_cur = 0
         if steps is None:
             steps = self.backwards_steps_max
 
-        # Average gradients 
+        # Average gradients
         for parameter in self.model.parameters():
             if parameter.grad is not None:
-                parameter.grad /= float(steps)**(0.5)
+                parameter.grad /= float(steps) ** (0.5)
 
     def clip_gradients(self):
         """
@@ -163,7 +172,9 @@ class BaseTrainer(object):
         """
         if self.model.config.grad_clip != -1:
             self.scaler.unscale_(self.opt)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.train_config.grad_clip)
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.train_config.grad_clip
+            )
 
     def eval_step(self, dataset):
         """
@@ -236,7 +247,11 @@ class BaseTrainer(object):
         pass
 
     def construct_dataloader(
-        self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
+        self,
+        dataset: BaseDataPipeline,
+        tokenizer: Callable,
+        multi_gpus: bool,
+        is_train: bool,
     ) -> DataLoader:
         sampler = RandomSampler(dataset)
 
@@ -251,6 +266,7 @@ class BaseTrainer(object):
             batch_size=self.train_config.batch_size,
             sampler=sampler,
             collate_fn=tokenizer,
+            drop_last=True if self.use_deepspeed and is_train else False,
         )
 
     def construct_tokenizer(self, passage_encoder: BaseEncoder) -> Callable:
@@ -269,6 +285,7 @@ class BaseTrainer(object):
 from carp.pytorch.model.architectures.carp import CARPTrainer
 from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
 from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
+
 # from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 # from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_shared_encoder import (

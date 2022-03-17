@@ -5,6 +5,7 @@ from carp.pytorch.model.architectures import *
 from carp.pytorch.scalability_utils import print_rank_0
 from carp.pytorch.training import BaseTrainer, register_trainer
 from carp.util import generate_indices
+import torch.distributed as dist
 
 patch_typeguard()
 
@@ -58,26 +59,33 @@ class CARPTrainer(BaseTrainer):
     ):
         forward_output = self.model(passages, reviews, config)
 
+        rev_encs, all_rev_encs, rev_offset = self.contrastive_parallel_all_gather(
+            forward_output["rev_encs"]
+        )
+        pass_encs, all_pass_encs, pass_offset = self.contrastive_parallel_all_gather(
+            forward_output["pass_encs"]
+        )
+
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
-            pass_tmp = forward_output["pass_encs"].copy()
+            pass_tmp = list(all_pass_encs.clone().split(config.microbatch_size))
             with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.model.module.encode_passages(passage).hidden
-            # torch.float32 torch.float16
-            loss = self.model.module.contrastive_loss(
-                torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-            )
+                micro_batch = self.model.module.encode_passages(passage).hidden
+                pass_tmp[pass_offset + index] = micro_batch
+                loss = self.model.module.contrastive_loss(
+                    torch.cat(pass_tmp), all_rev_encs
+                )
             self.deepspeed_backwards(loss)
 
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
-            rev_tmp = forward_output["rev_encs"].copy()  # no_grad
+            rev_tmp = list(all_rev_encs.clone().split(config.microbatch_size))
             with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.model.module.encode_reviews(review).hidden
-            # grad _just_ at positions in `index`
-            loss = self.model.module.contrastive_loss(
-                torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-            )
+                micro_batch = self.model.module.encode_reviews(review).hidden
+                rev_tmp[rev_offset + index] = micro_batch
+                loss = self.model.module.contrastive_loss(
+                    all_pass_encs, torch.cat(rev_tmp)
+                )
             self.deepspeed_backwards(loss)
 
         # Average the model gradients

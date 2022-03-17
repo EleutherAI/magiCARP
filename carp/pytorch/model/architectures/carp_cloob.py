@@ -8,6 +8,7 @@ from carp.util import generate_indices
 
 # TODO: Add torch typing
 # yoinked from https://github.com/ml-jku/cloob
+@torch.jit.script
 def infoLOOB_loss(x, y, labels, logit_scale):
     exp_logit_scale = logit_scale.exp()
     logits = x @ y.T * exp_logit_scale
@@ -19,6 +20,16 @@ def infoLOOB_loss(x, y, labels, logit_scale):
     arg_lse = logits * torch.logical_not(labels) + labels * large_neg
     negatives = torch.mean(torch.logsumexp(arg_lse, dim=1))
     return (1 / exp_logit_scale) * (positives + negatives)
+
+
+@torch.jit.script
+def hopfield(state_patterns, stored_patterns, hopfield_scale):
+    retrieved_patterns = stored_patterns.T @ nn.functional.softmax(
+        hopfield_scale.exp() * stored_patterns @ state_patterns.t(), dim=0
+    )
+    # Column vectors -> dim=0 to normalize the column vectors
+    norm = retrieved_patterns.norm(p=2, dim=0, keepdim=True)
+    return retrieved_patterns / norm
 
 
 def hopfield_retrieval(image_features, text_features, hopfield_scale):
@@ -46,17 +57,6 @@ def hopfield_retrieval(image_features, text_features, hopfield_scale):
     return patterns_xx, patterns_yy, patterns_xy, patterns_yx
 
 
-def hopfield(state_patterns, stored_patterns, hopfield_scale):
-    retrieved_patterns = stored_patterns.T @ nn.functional.softmax(
-        hopfield_scale.exp() * stored_patterns @ state_patterns.t(), dim=0
-    )
-    # Column vectors -> dim=0 to normalize the column vectors
-    retrieved_patterns = retrieved_patterns / retrieved_patterns.norm(
-        dim=0, keepdim=True
-    )
-    return retrieved_patterns
-
-
 patch_typeguard()
 
 
@@ -76,17 +76,16 @@ class CARPCloob(BaseModel):
             self.config
         )
 
-        self.clamp_min = torch.log(
-            torch.tensor([1 / 100], device=self.config.device)
-        )
+        self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
 
         # Add cloob specific parameters
         self.hopfield_scale = torch.ones([], device=self.config.device) * torch.log(
             torch.tensor([8], device=self.config.device, requires_grad=False)
         )
-        self.logit_scale = torch.ones([], device=self.config.device) *\
-             torch.log(torch.tensor([30], device=self.config.device, requires_grad=False))
+        self.logit_scale = torch.ones([], device=self.config.device) * torch.log(
+            torch.tensor([30], device=self.config.device, requires_grad=False)
+        )
 
         self.clamp_min = torch.log(torch.tensor([1 / 100], device=self.config.device))
         self.clamp_max = torch.log(torch.tensor([100], device=self.config.device))
@@ -186,7 +185,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.deepspeed_backwards(loss)
 
         # Average the model gradients
-        #self.average_gradients()
+        # self.average_gradients()
 
         # Clipping
         self.clip_gradients()
@@ -235,7 +234,7 @@ class CARPCloobTrainer(BaseTrainer):
             self.torch_backwards(loss)
 
         # Average the model gradients
-        #self.average_gradients(1./100.)
+        # self.average_gradients(1./100.)
 
         # Clipping
         self.clip_gradients()
