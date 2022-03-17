@@ -3,15 +3,19 @@ sys.path.append('.')
 
 from typing import List
 
+import torch
+import torch.nn.functional as F
+
 from carp.configs import ModelConfig
 #from carp.pytorch.model.architectures import *
 from carp.pytorch.model.architectures import (
     #BaseModel,
     #Projection,
-    CARP,
+    #CARP,
     register_architecture,
     typechecked,
 )
+from carp.pytorch.model.architectures.carp import CARP, CARPTrainer
 from carp.pytorch.training import BaseTrainer, register_trainer
 from carp.util import generate_indices
 
@@ -21,6 +25,8 @@ from torchtyping import TensorType, patch_typeguard
 from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
 from carp.pytorch.model.encoders import get_encoder
 from carp.configs import TrainConfig
+
+from loguru import logger
 
 # TO DO: Make sure this behaves the same as CARP. 
 #        If I didn't mess anything up, should be numerically identical.
@@ -43,8 +49,8 @@ class CARPSimRefactor(CARP):
 
     def item_pseudosimilarity__mode_j_to_mode_i(
         self,
-        y: TensorType[-1, "latent_dim"],
-        x: TensorType[-1, "latent_dim"],
+        y, #: TensorType[-1, "latent_dim"],
+        x, #: TensorType[-1, "latent_dim"],
         normalize=False,
     ):
         """
@@ -53,19 +59,19 @@ class CARPSimRefactor(CARP):
         return self.item_pseudosimilarity__mode_i_to_mode_j(y,x, normalize)
 
     def item_logits__mode_i_to_mode_j(
-            self,
-            x: TensorType[-1, "latent_dim"],
-            y: TensorType[-1, "latent_dim"],
-            normalize=False,
-        ):
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        normalize=False,
+    ):
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
         return S_ij * self.logit_scale.exp()
-
-     def item_logits__mode_j_to_mode_i(
-            self,
-            y: TensorType[-1, "latent_dim"],
-            x: TensorType[-1, "latent_dim"],
-            normalize=False,
+    
+    def item_logits__mode_j_to_mode_i(
+        self,
+        y, #: TensorType[-1, "latent_dim"],
+        x, #: TensorType[-1, "latent_dim"],
+        normalize=False,
         ):
         return self.item_logits__mode_i_to_mode_j(y,x,normalize)
 
