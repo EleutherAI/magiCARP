@@ -265,6 +265,7 @@ class CARPFilipOLD(CARPSimRefactor):
         #logger.debug(x.requires_grad) # False
         #logger.debug(y.shape) # 64, 174, 2048 # need to microbatch over this as well...
         #logger.debug(y.requires_grad) # False
+        # working, crashes as we build up the grad graph. let's see if crushing microbatch size let's this work
 
         if normalize:
             x = F.normalize(x)
