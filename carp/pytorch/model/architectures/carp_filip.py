@@ -88,12 +88,21 @@ class CARPSimRefactor(CARP):
         return_loss = True,
         return_acc=True,
     ):
-        n = x.shape[0]
+        if isinstance(logits_ij, list):
+            logits_ij = torch.cat(logits_ij)
+        try:
+            n = x.shape[0]
+        except AttributeError:
+            #logger.debug(len(logits_ij)) # 32 -> batch_size / microbatch_size
+            #logger.debug(logits_ij[0].shape) # 64 2048 -> [microbatch_size batch_size]
+            #raise
+            #n = logits_ij[0].shape[-1]
+            n = logits_ij.shape[-1]
         labels = torch.arange(n, device=self.config.device)
         
         if logits_ij is None:
             logits_ij = self.item_logits__mode_i_to_mode_j(x,y,normalize)
-
+        logger.debug(logits_ij.shape)
         outv = {}
         if return_loss:
             outv['loss'] = F.cross_entropy(logits_ij, labels)
@@ -210,8 +219,8 @@ class CARPSimRefactor(CARP):
 
     def compute_accuracy(
         self, 
-        x, #: TensorType[-1, "latent_dim"], 
-        y, #: TensorType[-1, "latent_dim"],
+        x=None, #: TensorType[-1, "latent_dim"], 
+        y=None, #: TensorType[-1, "latent_dim"],
         normalize=False,
         logits_ij = None,
         logits_ji = None,
