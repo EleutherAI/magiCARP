@@ -299,6 +299,8 @@ class CARPFilip(CARPFilipOLD):
             "forward_acc": forward_acc,
         }
 
+from copy import deepcopy
+
 @register_trainer
 class CARPSimRefactorTrainer(CARPTrainer):
 
@@ -336,13 +338,23 @@ class CARPSimRefactorTrainer(CARPTrainer):
             with torch.cuda.amp.autocast():
                 enc_i = encoder_w_grad(item).hidden
             logits_ij = logits_func(enc_i, enc_no_grad)
+
+            #logger.debug(logits_ij.requires_grad)
             
             if compute_loss:
-                logit_chunks[i] = logits_ij
+                #temp_logits = deepcopy(logit_chunks)
+                temp_logits = logit_chunks.copy()
+                logger.debug(i)
+                temp_logits[i] = logits_ij
+                logger.debug("computing loss")
                 loss = self.model.contrastive_loss(
-                    torch.cat(logit_chunks), enc_no_grad
+                    #torch.cat(logit_chunks), enc_no_grad
+                    torch.cat(temp_logits), enc_no_grad
                 )
+                logger.debug("calling backwards")
                 f_backwards(loss)
+                # getting errors on second call to backwards... maybe this will resolve?
+                #logit_chunks[i].detach() # nope, that doesn't do it :(
             else:
                 logit_chunks.append(logits_ij)
         return logit_chunks
@@ -456,13 +468,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
 
 
 
-
-
-
-
-
 @register_trainer
-class CARPFilipTrainer(CARPTrainer):
+class CARPFilipTrainer_Oldv2(CARPTrainer):
 
     def train_deepspeed_step(
         self,
