@@ -1,46 +1,35 @@
-
-#from copy import deepcopy
-
-# ugh... really?
 import sys
-sys.path.append('.')
+sys.path.append('.') # ugh... really?
 
-from typing import List, Dict, Callable
+from typing import List, Callable
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 
-#from carp.configs import ModelConfig
-
 from carp.pytorch.model.architectures import (
-    #BaseModel,
-    #Projection,
-    #CARP,
     register_architecture,
     typechecked,
 )
 from carp.pytorch.model.architectures.carp import CARP, CARPTrainer
-from carp.pytorch.training.trainer import register_trainer #,BaseTrainer,
+from carp.pytorch.training.trainer import register_trainer
 from carp.util import generate_indices
 
-from torchtyping import TensorType, patch_typeguard
+from torchtyping import TensorType
 
-# maybe useful?
-from carp.pytorch.data.utils.data_util import BatchElement #, chunkBatchElement
-#from carp.pytorch.model.encoders import get_encoder
+from carp.pytorch.data.utils.data_util import BatchElement
 from carp.configs import TrainConfig
 
 import einops as eo
 from loguru import logger
 
-# TO DO: Make sure this behaves the same as CARP. 
-#        If I didn't mess anything up, should be numerically identical.
 @typechecked
 @register_architecture
 class CARPSimRefactor(CARP):
     """
-    making the item-item similarity more general to facilitate cleaner FILIP implementation.
+    This class is just a refactoring of the CARP base architecture to facilitate microbatching
+    over similarity computations that aren't microbatched in the current base CARP. It should 
+    behave numerically equivalent to the unmodified parent class.
     """
     def item_pseudosimilarity__mode_i_to_mode_j(
         self,
@@ -97,16 +86,11 @@ class CARPSimRefactor(CARP):
         try:
             n = x.shape[0]
         except AttributeError:
-            #logger.debug(len(logits_ij)) # 32 -> batch_size / microbatch_size
-            #logger.debug(logits_ij[0].shape) # 64 2048 -> [microbatch_size batch_size]
-            #raise
-            #n = logits_ij[0].shape[-1]
-            n = logits_ij.shape[-1]
+            n = logits_ij.shape[-1] # NB: n should correspond to batch_size, not microbatch_size
         labels = torch.arange(n, device=self.config.device)
         
         if logits_ij is None:
             logits_ij = self.item_logits__mode_i_to_mode_j(x,y,normalize)
-        #logger.debug(logits_ij.shape) # [batch_size batch_size]
         outv = {}
         if return_loss:
             outv['loss'] = F.cross_entropy(logits_ij, labels)
@@ -262,29 +246,23 @@ class CARPFilip(CARPSimRefactor):
 
     def item_pseudosimilarity__mode_i_to_mode_j(
         self,
-        x,#: TensorType["batch_size", -1, "latent_dim"],
-        y,#: TensorType["batch_size", -1, "latent_dim"],
+        x: TensorType["microbatch_size", -1, "latent_dim"],
+        y: TensorType["microbatch_size", -1, "latent_dim"],
         normalize=True,
     ):
-        #logger.debug(x.shape) # 64, 154, 2048
-        #logger.debug(x.requires_grad) # False
-        #logger.debug(y.shape) # 64, 174, 2048 # need to microbatch over this as well...
-        #logger.debug(y.requires_grad) # False
-        # working, crashes as we build up the grad graph. let's see if crushing microbatch size let's this work
-
         if normalize:
             x = F.normalize(x)
             y = F.normalize(y)
         y2 = eo.rearrange(y, 'b m d -> b d m')
         # fancy broadcasting
         x2 = x.unsqueeze(1)
-        z = torch.matmul(x2,y2) # this is where we get the out of memory error. no surprise there.
+        z = torch.matmul(x2,y2) # this op is very memory heavy
         return z
 
     def item_logits__mode_i_to_mode_j(
             self,
-            x,#: TensorType["batch_size", -1, "latent_dim"],
-            y,#: TensorType["batch_size", -1, "latent_dim"],
+            x: TensorType["microbatch_size", -1, "latent_dim"],
+            y: TensorType["microbatch_size", -1, "latent_dim"],
             normalize=True,
         ):
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
@@ -307,15 +285,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
         f_backwards=None,
     ):
         microbatch_inds = generate_indices(
-            config.batch_size, 
-            #mode_w_grad.input_ids.shape[0],
+            config.batch_size, #mode_w_grad.input_ids.shape[0],
             config.microbatch_size, 
             shuffle=False
         )
 
         with torch.no_grad():
-            # still explodes, need to microbatch over this one too
-            #enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
+            #enc_no_grad = encoder_no_grad(mode_no_grad).hidden 
+            # ...still explodes, need to microbatch over this one too
             mbs_enc_no_grad = [
                 encoder_no_grad(
                     BatchElement(mode_no_grad.input_ids[i], mode_no_grad.mask[i])
@@ -323,11 +300,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 for i in microbatch_inds
             ]
 
-        # this needs to move.
-        # we want to encode w grad one item at a time.
-        ######
-        # wait fuck no. I'm already doing that correctly. 
-        # just parsing it up into microbatches here, then encoding the one item below
+        # just parsing into microbatches here
         mbs_w_grad: List[BatchElement] = [
             BatchElement(mode_w_grad.input_ids[i], mode_w_grad.mask[i])
             for i in microbatch_inds
@@ -340,39 +313,19 @@ class CARPSimRefactorTrainer(CARPTrainer):
         for i, item in enumerate(mbs_w_grad):
             with torch.cuda.amp.autocast():
                 enc_i = encoder_w_grad(item).hidden
-            #logits_ij = logits_func(enc_i, enc_no_grad)
+
             logits_ij_list = [logits_func(enc_i, enc_no_grad) 
                 for enc_no_grad in mbs_enc_no_grad]
-            #logger.debug(logits_ij_list[0].shape) # 64, 64
-            #logits_ij = torch.cat(logits_ij_list) # 2048 64 ... this is backwards
-            logits_ij = torch.cat(logits_ij_list, dim=-1) # 64 2048 thre we go
-            #logger.debug(logits_ij.shape) 
 
+            logits_ij = torch.cat(logits_ij_list, dim=-1) # [microbatch_size batch_size]
 
-            #logger.debug(logits_ij.requires_grad) # True
-            #logger.debug(logits_ij.shape) # 64 2048 -> [microbatch_size batch_size]
-            
             if compute_loss:
-                #temp_logits = deepcopy(logit_chunks)
                 temp_logits = logit_chunks.copy()
-                #temp_logits = logit_chunks
-                #logger.debug(i)
                 temp_logits[i] = logits_ij
-                #logger.debug("computing loss")
-                logits_cat = torch.cat(temp_logits)
-                #logger.debug(logits_cat.shape) # 2048 2048 -> [batch_size batch_size]
-                #logger.debug(logits_cat.requires_grad) # True
-                
-                #loss = self.model.contrastive_loss(
-                #    #torch.cat(logit_chunks), enc_no_grad
-                #    #torch.cat(temp_logits), enc_no_grad
-                #    logits_cat, enc_no_grad
-                #)
+                logits_cat = torch.cat(temp_logits) # logits_cat.shape -> [batch_size batch_size]
+
                 loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
-                #logger.debug("calling backwards")
                 f_backwards(loss)
-                # getting errors on second call to backwards... maybe this will resolve?
-                #logit_chunks[i].detach() # nope, that doesn't do it :(
             else:
                 logit_chunks.append(logits_ij)
         return logit_chunks
@@ -477,8 +430,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
         self.torch_step()
 
         with torch.no_grad():
-            #loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
-            #acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
             loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
             acc = self.model.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
