@@ -1,3 +1,7 @@
+
+#from copy import deepcopy
+
+# ugh... really?
 import sys
 sys.path.append('.')
 
@@ -7,8 +11,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from carp.configs import ModelConfig
-#from carp.pytorch.model.architectures import *
+#from carp.configs import ModelConfig
+
 from carp.pytorch.model.architectures import (
     #BaseModel,
     #Projection,
@@ -17,14 +21,14 @@ from carp.pytorch.model.architectures import (
     typechecked,
 )
 from carp.pytorch.model.architectures.carp import CARP, CARPTrainer
-from carp.pytorch.training.trainer import BaseTrainer, register_trainer
+from carp.pytorch.training.trainer import register_trainer #,BaseTrainer,
 from carp.util import generate_indices
 
 from torchtyping import TensorType, patch_typeguard
 
 # maybe useful?
-from carp.pytorch.data.utils.data_util import BatchElement, chunkBatchElement
-from carp.pytorch.model.encoders import get_encoder
+from carp.pytorch.data.utils.data_util import BatchElement #, chunkBatchElement
+#from carp.pytorch.model.encoders import get_encoder
 from carp.configs import TrainConfig
 
 import einops as eo
@@ -251,9 +255,10 @@ class CARPSimRefactor(CARP):
             acc_ji = (torch.argmax(logits_ji, dim=1) == labels).sum()
         return (acc_ij + acc_ji) / n / 2
 
+
 @typechecked
 @register_architecture
-class CARPFilipOLD(CARPSimRefactor):
+class CARPFilip(CARPSimRefactor):
 
     def item_pseudosimilarity__mode_i_to_mode_j(
         self,
@@ -286,45 +291,6 @@ class CARPFilipOLD(CARPSimRefactor):
         logits_ij = S_ij * self.logit_scale.exp()
         return logits_ij.max(dim=-1).values.mean(dim=-1)
 
-
-
-@typechecked
-@register_architecture
-class CARPFilip(CARPSimRefactor):
-
-    def forward(
-        self,
-        passages: BatchElement,
-        reviews: BatchElement,
-        config: TrainConfig,
-    ):
-        microbatch_inds = generate_indices(
-            passages.input_ids.shape[0], config.microbatch_size, shuffle=False
-        )
-        # Split tokens and masks into these microbatches
-        pass_mbs: List[BatchElement] = [
-            BatchElement(passages.input_ids[i], passages.mask[i])
-            for i in microbatch_inds
-        ]
-        rev_mbs: List[BatchElement] = [
-            BatchElement(reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
-        ]
-
-        # Initially get all encodings without grad
-        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
-
-        # compute accuracy
-        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
-
-        return {
-            "pass_mbs": pass_mbs,
-            "pass_encs": pass_encs,
-            "rev_mbs": rev_mbs,
-            "rev_encs": rev_encs,
-            "forward_acc": forward_acc,
-        }
-
-from copy import deepcopy
 
 @register_trainer
 class CARPSimRefactorTrainer(CARPTrainer):
@@ -523,123 +489,3 @@ class CARPSimRefactorTrainer(CARPTrainer):
         }
 
 
-
-@register_trainer
-class CARPFilipTrainer_Oldv2(CARPTrainer):
-
-    def train_deepspeed_step(
-        self,
-        passages: BatchElement,
-        reviews: BatchElement,
-        config: TrainConfig,
-    ):
-        #forward_output = self.model(passages, reviews, config)
-
-        microbatch_inds = generate_indices(
-            passages.input_ids.shape[0], config.microbatch_size, shuffle=False
-        )
-        
-        pass_mbs: List[BatchElement] = [
-            BatchElement(passages.input_ids[i], passages.mask[i])
-            for i in microbatch_inds
-        ]
-
-        with torch.no_grad():
-            rev_encs = [self.model.encode_reviews(r).hidden for r in reviews]
-
-        pass_temp = []
-        for i in microbatch_inds:
-            with torch.cuda.amp.autocast():
-                passage = pass_mbs[i]
-                pass_tmp_i = self.model.module.encode_passages(passage).hidden
-                pass_temp.append(pass_tmp_i)
-            loss = self.model.contrastive_loss(
-                torch.cat(pass_tmp), torch.cat(rev_encs)
-            )
-            self.deepspeed_backwards(loss)
-        rev_encs = None
-        pass_mbs = None
-
-
-        rev_mbs: List[BatchElement] = [
-            BatchElement(reviews.input_ids[i], reviews.mask[i])
-            for i in microbatch_inds
-        ]
-
-        with torch.no_grad():
-            pass_encs = [self.model.encode_passages(p).hidden for p in passages]
-
-        rev_temp = []
-        for i in microbatch_inds:
-            with torch.cuda.amp.autocast():
-                review = rev_mbs[i]
-                rev_tmp_i = self.model.encode_passages(review).hidden
-                rev_temp.append(rev_tmp_i)
-            loss = self.model.contrastive_loss(
-                torch.cat(rev_tmp), torch.cat(pass_encs)
-            )
-            self.deepspeed_backwards(loss)
-        pass_encs = None
-        rev_mbs = None
-
-        # Average the model gradients
-        self.average_gradients()
-
-        # Clipping
-        self.clip_gradients()
-
-        # Step the model
-        self.deepspeed_step()
-
-        return {
-            "Loss/Train": loss,
-            "Acc/Forward": forward_output["forward_acc"],
-        }
-
-    def train_torch_step(
-        self,
-        passages: BatchElement,
-        reviews: BatchElement,
-        config: TrainConfig,
-    ) -> Dict[str, TensorType[()]]:
-        forward_output = self.model(passages, reviews, config)
-
-        # does gradient accumulation
-        self.zero_grad()
-
-        # Encode passages in microbatches (with grad)
-        for index, passage in enumerate(forward_output["pass_mbs"]):
-            pass_tmp = forward_output["pass_encs"].copy()
-            with torch.cuda.amp.autocast():
-                pass_tmp[index] = self.model.encode_passages(passage).hidden
-                loss = self.model.contrastive_loss(
-                    torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                )
-
-            self.torch_backwards(loss)
-
-        # Encode reviews in microbatches (with grad)
-        for index, review in enumerate(forward_output["rev_mbs"]):
-            rev_tmp = forward_output["rev_encs"].copy()  # no_grad
-            with torch.cuda.amp.autocast():
-                rev_tmp[index] = self.model.encode_reviews(review).hidden
-                # grad _just_ at positions in `index`
-                loss = self.model.contrastive_loss(
-                    torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                )
-
-            self.torch_backwards(loss)
-
-        # Average the model gradients
-        self.average_gradients()
-
-        # Clipping
-        self.clip_gradients()
-
-        # Step the model
-        self.torch_step()
-
-        return {
-            "Loss/Train": loss,
-            "Acc/Forward": forward_output["forward_acc"],
-        }
