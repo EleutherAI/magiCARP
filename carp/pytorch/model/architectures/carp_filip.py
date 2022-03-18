@@ -344,14 +344,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
             if compute_loss:
                 #temp_logits = deepcopy(logit_chunks)
                 temp_logits = logit_chunks.copy()
-                logger.debug(i)
+                #logger.debug(i)
                 temp_logits[i] = logits_ij
-                logger.debug("computing loss")
+                #logger.debug("computing loss")
                 loss = self.model.contrastive_loss(
                     #torch.cat(logit_chunks), enc_no_grad
                     torch.cat(temp_logits), enc_no_grad
                 )
-                logger.debug("calling backwards")
+                #logger.debug("calling backwards")
                 f_backwards(loss)
                 # getting errors on second call to backwards... maybe this will resolve?
                 #logit_chunks[i].detach() # nope, that doesn't do it :(
@@ -378,8 +378,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logit_chunks=None,
                 f_backwards=None,
             )
-        logger.debug(type(logits_chunks_ij))
-        logger.debug(len(logits_chunks_ij))
+        #logger.debug(type(logits_chunks_ij))
+        #logger.debug(len(logits_chunks_ij))
         
         # 2. Ok, again but this time with grad and loss....
         logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
@@ -457,8 +457,10 @@ class CARPSimRefactorTrainer(CARPTrainer):
         self.torch_step()
 
         with torch.no_grad():
-            loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
-            acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+            #loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            #acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+            loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            acc = self.model.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
         return {
             "Loss/Train": loss,
