@@ -150,13 +150,15 @@ class CARPSimRefactor(CARP):
         loss_ij=None,
         loss_ji=None,
         use_loss_transpose=True,
+        logits_ij=None,
+        logits_ji=None,
     ):
         if loss_ij is None:
-            loss_ij = self.loss_component__mode_i_to_mode_j(x,y,normalize)
+            loss_ij = self.loss_component__mode_i_to_mode_j(x=x,y=y,normalize=normalize, logits_ij=logits_ij)
         if loss_ji is None:
             loss_ji = loss_ij.T
             if not use_loss_transpose:
-                loss_ji = self.loss_component__mode_j_to_mode_i(x,y,normalize)
+                loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize, logits_ji=logits_ji)
         return loss_ij, loss_ji
 
     def contrastive_loss(
@@ -167,8 +169,16 @@ class CARPSimRefactor(CARP):
         loss_ij=None,
         loss_ji=None,
         use_loss_transpose=True,
+        logits_ij=None,
+        logits_ji=None,
     ) -> TensorType[(), float]:
-        losses = self.loss_components(x=x,y=y, normalize=normalize, loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose)
+
+        losses = self.loss_components(
+            x=x,y=y, normalize=normalize, 
+            loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
+            logits_ij=logits_ij,
+            logits_ji=logits_ji
+            )
         return sum(losses) / len(losses)
 
     def acc_component__mode_i_to_mode_j(
