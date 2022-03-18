@@ -28,7 +28,7 @@ train_job:
   dupe_protection: true
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
-  trainer: "CARPSimRefactorTrainer" #"CARPFilipTrainer"
+  trainer: "CARPSimRefactorTrainer" #"CARPTrainer" #"CARPSimRefactorTrainer" #"CARPFilipTrainer"
   gradient_checkpointing: true
   grad_clip: -1.0
   grad_accum: 4

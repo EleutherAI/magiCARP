@@ -51,14 +51,14 @@ class CARPSimRefactor(CARP):
 
     def item_pseudosimilarity__mode_j_to_mode_i(
         self,
-        y, #: TensorType[-1, "latent_dim"],
         x, #: TensorType[-1, "latent_dim"],
+        y, #: TensorType[-1, "latent_dim"],
         normalize=False,
     ):
         """
         "pseudo" similarity to permit asymmetric and mode-specifice simmilarity measures
         """
-        return self.item_pseudosimilarity__mode_i_to_mode_j(y,x, normalize)
+        return self.item_pseudosimilarity__mode_i_to_mode_j(x=y,y=x, normalize=normalize)
 
     def item_logits__mode_i_to_mode_j(
         self,
@@ -67,17 +67,17 @@ class CARPSimRefactor(CARP):
         normalize=False,
     #) -> TensorType["batch_size", "batch_size"]:
     ) -> TensorType:
-        S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
+        S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
         return S_ij * self.logit_scale.exp()
     
     def item_logits__mode_j_to_mode_i(
         self,
-        y, #: TensorType[-1, "latent_dim"],
         x, #: TensorType[-1, "latent_dim"],
+        y, #: TensorType[-1, "latent_dim"],
         normalize=False,
         #) -> TensorType["batch_size", "batch_size"]:
         ) -> TensorType:
-        return self.item_logits__mode_i_to_mode_j(y,x,normalize)
+        return self.item_logits__mode_i_to_mode_j(x=y,y=x,normalize=normalize)
 
     def _compute_loss_or_acc(
         self, 
@@ -102,7 +102,7 @@ class CARPSimRefactor(CARP):
         
         if logits_ij is None:
             logits_ij = self.item_logits__mode_i_to_mode_j(x,y,normalize)
-        logger.debug(logits_ij.shape)
+        #logger.debug(logits_ij.shape) # [batch_size batch_size]
         outv = {}
         if return_loss:
             outv['loss'] = F.cross_entropy(logits_ij, labels)
@@ -137,7 +137,7 @@ class CARPSimRefactor(CARP):
         normalize=False,
         logits_ji = None,
     ) -> TensorType[(), float]:
-        return self.loss_component__mode_i_to_mode_j(y=y,x=x,normalize=normalize, logits_ij=logits_ji)
+        return self.loss_component__mode_i_to_mode_j(x=y,y=x,normalize=normalize, logits_ij=logits_ji)
 
 
     def contrastive_loss_terms(
@@ -245,8 +245,8 @@ class CARPSimRefactor(CARP):
             n = x.shape[0]
             labels = torch.arange(n, device=self.config.device)
             
-            logits_ij = self.item_logits__mode_i_to_mode_j(x,y,normalize)
-            logits_ji = self.item_logits__mode_j_to_mode_i(y,x,normalize)
+            logits_ij = self.item_logits__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
+            logits_ji = self.item_logits__mode_j_to_mode_i(x=x,y=y,normalize=normalize)
             acc_ij = (torch.argmax(logits_ij, dim=1) == labels).sum()
             acc_ji = (torch.argmax(logits_ji, dim=1) == labels).sum()
         return (acc_ij + acc_ji) / n / 2
@@ -344,6 +344,11 @@ class CARPSimRefactorTrainer(CARPTrainer):
         with torch.no_grad():
             enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
 
+        # this needs to move.
+        # we want to encode w grad one item at a time.
+        ######
+        # wait fuck no. I'm already doing that correctly. 
+        # just parsing it up into microbatches here, then encoding the one item below
         mbs_w_grad: List[BatchElement] = [
             BatchElement(mode_w_grad.input_ids[i], mode_w_grad.mask[i])
             for i in microbatch_inds
@@ -358,18 +363,26 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 enc_i = encoder_w_grad(item).hidden
             logits_ij = logits_func(enc_i, enc_no_grad)
 
-            #logger.debug(logits_ij.requires_grad)
+            #logger.debug(logits_ij.requires_grad) # True
+            #logger.debug(logits_ij.shape) # 64 2048 -> [microbatch_size batch_size]
             
             if compute_loss:
                 #temp_logits = deepcopy(logit_chunks)
                 temp_logits = logit_chunks.copy()
+                #temp_logits = logit_chunks
                 #logger.debug(i)
                 temp_logits[i] = logits_ij
                 #logger.debug("computing loss")
-                loss = self.model.contrastive_loss(
-                    #torch.cat(logit_chunks), enc_no_grad
-                    torch.cat(temp_logits), enc_no_grad
-                )
+                logits_cat = torch.cat(temp_logits)
+                #logger.debug(logits_cat.shape) # 2048 2048 -> [batch_size batch_size]
+                #logger.debug(logits_cat.requires_grad) # True
+                
+                #loss = self.model.contrastive_loss(
+                #    #torch.cat(logit_chunks), enc_no_grad
+                #    #torch.cat(temp_logits), enc_no_grad
+                #    logits_cat, enc_no_grad
+                #)
+                loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
                 #logger.debug("calling backwards")
                 f_backwards(loss)
                 # getting errors on second call to backwards... maybe this will resolve?
