@@ -419,6 +419,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
     ):
 
         # 1. Build up logits_ij
+        logger.debug("building logits_ij no grad")
         with torch.no_grad():
             logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
@@ -434,6 +435,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
         #logger.debug(len(logits_chunks_ij))
         
         # 2. Ok, again but this time with grad and loss....
+        logger.debug("building logits_ij with grad")
         logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_w_grad,
                 mode_no_grad=mode_no_grad,
