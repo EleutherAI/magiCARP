@@ -257,23 +257,28 @@ class CARPFilipOLD(CARPSimRefactor):
 
     def item_pseudosimilarity__mode_i_to_mode_j(
         self,
-        x: TensorType["batch_size", -1, "latent_dim"],
-        y: TensorType["batch_size", -1, "latent_dim"],
+        x,#: TensorType["batch_size", -1, "latent_dim"],
+        y,#: TensorType["batch_size", -1, "latent_dim"],
         normalize=True,
     ):
+        #logger.debug(x.shape) # 64, 154, 2048
+        #logger.debug(x.requires_grad) # False
+        #logger.debug(y.shape) # 64, 174, 2048 # need to microbatch over this as well...
+        #logger.debug(y.requires_grad) # False
+
         if normalize:
             x = F.normalize(x)
             y = F.normalize(y)
         y2 = eo.rearrange(y, 'b m d -> b d m')
         # fancy broadcasting
         x2 = x.unsqueeze(1)
-        z = torch.matmul(x2,y2)
+        z = torch.matmul(x2,y2) # this is where we get the out of memory error. no surprise there.
         return z
 
     def item_logits__mode_i_to_mode_j(
             self,
-            x: TensorType["batch_size", -1, "latent_dim"],
-            y: TensorType["batch_size", -1, "latent_dim"],
+            x,#: TensorType["batch_size", -1, "latent_dim"],
+            y,#: TensorType["batch_size", -1, "latent_dim"],
             normalize=True,
         ):
         S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
@@ -284,7 +289,7 @@ class CARPFilipOLD(CARPSimRefactor):
 
 @typechecked
 @register_architecture
-class CARPFilip(CARPFilipOLD):
+class CARPFilip(CARPSimRefactor):
 
     def forward(
         self,
@@ -342,7 +347,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
         )
 
         with torch.no_grad():
-            enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
+            # still explodes, need to microbatch over this one too
+            #enc_no_grad = encoder_no_grad(mode_no_grad).hidden # might need to microbatch over these...
+            mbs_enc_no_grad = [
+                encoder_no_grad(
+                    BatchElement(mode_no_grad.input_ids[i], mode_no_grad.mask[i])
+                ).hidden
+                for i in microbatch_inds
+            ]
 
         # this needs to move.
         # we want to encode w grad one item at a time.
@@ -361,7 +373,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
         for i, item in enumerate(mbs_w_grad):
             with torch.cuda.amp.autocast():
                 enc_i = encoder_w_grad(item).hidden
-            logits_ij = logits_func(enc_i, enc_no_grad)
+            #logits_ij = logits_func(enc_i, enc_no_grad)
+            logits_ij_list = [logits_func(enc_i, enc_no_grad) 
+                for enc_no_grad in mbs_enc_no_grad]
+            #logger.debug(logits_ij_list[0].shape) # 64, 64
+            #logits_ij = torch.cat(logits_ij_list) # 2048 64 ... this is backwards
+            logits_ij = torch.cat(logits_ij_list, dim=-1) # 64 2048 thre we go
+            #logger.debug(logits_ij.shape) 
+
 
             #logger.debug(logits_ij.requires_grad) # True
             #logger.debug(logits_ij.shape) # 64 2048 -> [microbatch_size batch_size]
