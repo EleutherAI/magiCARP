@@ -16,6 +16,7 @@ from carp.configs import TrainConfig
 from carp.pytorch.data import BaseDataPipeline, get_datapipeline
 from carp.pytorch.data.utils.data_util import chunkBatchElement
 from carp.pytorch.model.encoders import BaseEncoder
+import torch.distributed as dist
 
 # specifies a dictionary of architectures
 _TRAINERS: Dict[str, any] = {}  # registry
@@ -23,7 +24,6 @@ _TRAINERS: Dict[str, any] = {}  # registry
 
 def register_trainer(name):
     """Decorator used register a CARP architecture
-
     Args:
         name: Name of the architecture
     """
@@ -86,6 +86,15 @@ class BaseTrainer(object):
 
     def train_torch_step(self, *args, **kwargs):
         raise NotImplementedError
+
+    def contrastive_parallel_all_gather(self, encs):
+        encs = torch.cat(encs)
+        all_encs_across_gpus = [
+            torch.empty_like(encs) for _ in range(dist.get_world_size())
+        ]
+        dist.all_gather(all_encs_across_gpus, encs)
+        offset = dist.get_rank() * encs.size(0) // self.train_config.microbatch_size
+        return encs, torch.cat(all_encs_across_gpus), offset
 
     def torch_backwards(self, loss):
         """
@@ -241,7 +250,11 @@ class BaseTrainer(object):
         pass
 
     def construct_dataloader(
-        self, dataset: BaseDataPipeline, tokenizer: Callable, multi_gpus: bool
+        self,
+        dataset: BaseDataPipeline,
+        tokenizer: Callable,
+        multi_gpus: bool,
+        is_train: bool,
     ) -> DataLoader:
         sampler = RandomSampler(dataset)
 
@@ -256,6 +269,7 @@ class BaseTrainer(object):
             batch_size=self.train_config.batch_size,
             sampler=sampler,
             collate_fn=tokenizer,
+            drop_last=True if self.use_deepspeed and is_train else False,
         )
 
     def construct_tokenizer(self, passage_encoder: BaseEncoder) -> Callable:

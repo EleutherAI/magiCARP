@@ -136,8 +136,8 @@ def train(
             model=model,
             model_parameters=model.parameters(),
             config=args.deepspeed_config,
-            mpu=model.mpu if hasattr(model, "mpu") else None,
         )
+        setattr(model, "config", model.module.config)
         scheduler = LambdaLR(opt.optimizer, get_scheduling_func(trainer.train_config))
 
     else:
@@ -176,7 +176,7 @@ def train(
 
     for epoch in range(trainer.train_config.epochs):
         trainer.on_epoch_start()
-        train_data = trainer.construct_dataloader(dataset, tokenizer, multi_gpus)
+        train_data = trainer.construct_dataloader(dataset, tokenizer, multi_gpus, is_train=True)
 
         for passages, reviews in train_data:
             timer.hit()
@@ -217,7 +217,7 @@ def train(
                 print_rank_0("VALIDATING...")
                 trainer.model.eval()
                 trainer.before_validate_step()
-                eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus)
+                eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus, is_train=False)
 
                 eval_out = trainer.eval_step(eval_data)
                 trainer.after_validate_step()
@@ -262,9 +262,9 @@ if __name__ == "__main__":
         sanity_check(args, config)
         args.deepspeed_config = parse_deepspeed_config(
             args,
-            trainer.train_config,
-            lr=trainer.train_config.learning_rate_init,
-            weight_decay=0,
+            train_config,
+            lr=train_config.learning_rate_init,
+            weight_decay=train_config.weight_decay,
         )
 
         multi_gpus = (
@@ -274,6 +274,9 @@ if __name__ == "__main__":
         )
 
         if multi_gpus is True:
+            assert (
+                args.deepspeed_config["zero_optimization"]["stage"] != 3
+            ), "Currently, ZeRO3 is not compatible with our codebase."
             init_process_group(backend="nccl")
             torch.cuda.set_device(torch.distributed.get_rank())
 
