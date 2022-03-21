@@ -242,9 +242,38 @@ class CARPSimRefactor(CARP):
 
 @typechecked
 @register_architecture
+@typechecked
+@register_architecture
 class CARPFilip(CARPSimRefactor):
 
     def item_pseudosimilarity__mode_i_to_mode_j(
+        self,
+        x: TensorType["microbatch_size", -1, "latent_dim"],
+        y: TensorType["microbatch_size", -1, "latent_dim"],
+        normalize=True,
+    ):
+        #return self.item_pseudosimilarity__mode_i_to_mode_j_matmul(x,y,normalize)
+        return self.item_pseudosimilarity__mode_i_to_mode_j_einsum(x,y,normalize)
+
+
+    # huge thanks to MicPie, 
+    # will likely incorporate learnings from lucidrains' x-clip shortly
+    def item_pseudosimilarity__mode_i_to_mode_j_einsum(
+        self,
+        x: TensorType["microbatch_size", -1, "latent_dim"],
+        y: TensorType["microbatch_size", -1, "latent_dim"],
+        normalize=True,
+    ):
+        if normalize:
+            x = F.normalize(x)
+            y = F.normalize(y)
+        return torch.einsum('xmd,ynd->xymn', x, y)
+
+    # numerically equivalent to the einsum version, 
+    # but WAAAY more memory-consumptive. 
+    # Leaving this here to document for posterity. 
+    # Don't use this. It's awful.
+    def item_pseudosimilarity__mode_i_to_mode_j_matmul(
         self,
         x: TensorType["microbatch_size", -1, "latent_dim"],
         y: TensorType["microbatch_size", -1, "latent_dim"],
@@ -258,6 +287,7 @@ class CARPFilip(CARPSimRefactor):
         x2 = x.unsqueeze(1)
         z = torch.matmul(x2,y2) # this op is very memory heavy
         return z
+
 
     def item_logits__mode_i_to_mode_j(
             self,
