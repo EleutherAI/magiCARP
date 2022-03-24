@@ -356,7 +356,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
 
             logits_ij_list = [logits_func(enc_i, enc_no_grad) 
                 for enc_no_grad in mbs_enc_no_grad]
-            #logger.debug(len(logits_ij_list))
             logits_ij = torch.cat(logits_ij_list, dim=-1) # [microbatch_size batch_size]
 
             if compute_loss:
@@ -364,11 +363,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 temp_logits = logit_chunks_ij.copy()
                 temp_logits[i] = logits_ij
                 logits_cat = torch.cat(temp_logits) # logits_cat.shape -> [batch_size batch_size]
-                #logger.debug(logits_cat.shape) # [batch_size batch_size]
-                #loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
                 logits_ji = torch.cat(logit_chunks_ji.copy())
-                #logger.debug(logits_ji.shape) # [batch_size batch_size]
-                #loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
                 loss_ij = self.model.logits_ij_to_loss_ij(logits_cat)
                 loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
                 loss = (loss_ij + loss_ji)/2
@@ -417,23 +412,10 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 encoder_no_grad=self.model.encode_reviews,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                #logit_chunks=None,
-                #f_backwards=None,
             )
 
         logger.debug("building logits_ji no grad")
         with torch.no_grad():
-            # do i have this right? getting confused w ij, ji, x=y...
-            #logits_chunks_ji = self.microbatch_up_logits__mode_j_to_mode_i(
-            #    mode_w_grad=mode_w_grad,
-            #    mode_no_grad=mode_no_grad,
-            #    encoder_w_grad=self.model.encode_passages,
-            #    encoder_no_grad=self.model.encode_reviews,
-            #    logits_func=self.model.item_logits__mode_j_to_mode_i,
-            #    config=config,
-            #    logit_chunks=None,
-            #    f_backwards=None,
-            #)
             logits_chunks_ji = self.microbatch_up_logits__mode_i_to_mode_j(
                 mode_w_grad=mode_no_grad,
                 mode_no_grad=mode_w_grad,
@@ -441,8 +423,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 encoder_no_grad=self.model.encode_passages,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                #logit_chunks=None,
-                #f_backwards=None,
             )
         return logits_chunks_ij, logits_chunks_ji
 
@@ -469,7 +449,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
                 logit_chunks_ij=logits_chunks_ij,
-                #logits_ji=torch.cat(logits_chunks_ji),
                 logit_chunks_ji=logits_chunks_ji,
                 f_backwards=f_backwards,
             )
@@ -483,12 +462,10 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
                 logit_chunks_ij=logits_chunks_ji,
-                #logits_ji=torch.cat(logits_chunks_ij),
                 logit_chunks_ji=logits_chunks_ij, # with s or without s??? bad david, bad. pick one.
                 f_backwards=f_backwards,
             )
 
-        #return logits_chunks_ij, logits_chunks_ji
         return torch.cat(logits_chunks_ij), torch.cat(logits_chunks_ji)
     
     def train_deepspeed_step(
@@ -498,7 +475,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
         config: TrainConfig,
     ):
         with self.autocast():
-            #logits_ij = self._inner_step(
             logits_ij, logits_ji = self._inner_step(
                 mode_w_grad=passages,
                 mode_no_grad=reviews,
@@ -506,19 +482,11 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 f_backwards= self.deepspeed_backwards,
             )
         
-            #logits_ji = self._inner_step(
-            #    mode_w_grad=reviews,
-            #    mode_no_grad=passages,
-            #    config=config,
-            #    f_backwards= self.deepspeed_backwards,
-            #)
-        
         self.average_gradients()
         self.clip_gradients()
         self.deepspeed_step()
 
         with torch.no_grad():
-            #loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
             loss = (logits_ij + logits_ji)/2
             acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
@@ -536,7 +504,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
     ):
         self.zero_grad()
         with self.autocast():
-            #logits_ij = self._inner_step(
             logits_ij, logits_ji = self._inner_step(
                 mode_w_grad=passages,
                 mode_no_grad=reviews,
@@ -544,26 +511,11 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 f_backwards= self.torch_backwards,
             )
         
-            #logits_ji = self._inner_step(
-            #    mode_w_grad=reviews,
-            #    mode_no_grad=passages,
-            #    config=config,
-            #    f_backwards= self.torch_backwards,
-            #)
-        
         self.average_gradients()
         self.clip_gradients()
         self.torch_step()
 
-        # this is unnecessarily duplicated here.
-        # let's move the "if compute loss" stuff here maybe?
-        # or move them both to _inner step and return thos values up to this scope
-        # instead of returning the logits? yeah that makes sense.
-        # ... I think maybe I don't need an inner step though...
-        # Whatever. leave this here for now.
         with torch.no_grad():
-            #loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
-            #loss = (logits_ij + logits_ji)/2
             loss_ij = self.model.logits_ij_to_loss_ij(logits_ij)
             loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
             loss = (loss_ij + loss_ji)/2
@@ -583,15 +535,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
         Returns:
             dict: Dictionary of validation loss and validation accuracy
         """
-        #passages = []
-        #reviews = []
-        #for p, r in dataset:
-        #    passages.append(p)
-        #    reviews.append(r)
-
-        # TODO: Ideally should get microbatch size from trainconfig for the second argument
-        #passages = chunkBatchElement(passages[0], 8)
-        #reviews = chunkBatchElement(reviews[0], 8)
         loss = 0
         acc = 0
         n=0
@@ -603,10 +546,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                     #config=config,#: TrainConfig,
                     # uh... why not just do this?
                     config=self.train_config,
-                    #f_backwards=None,
                 )
                 logits_ij, logits_ji = torch.cat(logits_chunks_ij), torch.cat(logits_chunks_ji)
-                #loss_k = (logits_ij + logits_ji)/2
                 loss_ij = self.model.logits_ij_to_loss_ij(logits_ij)
                 loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
                 loss_k = (loss_ij + loss_ji)/2
@@ -614,7 +555,6 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 loss += loss_k.item()
                 acc += acc_k.item()
                 n+=1
-        #return {"Loss/Validation": loss.item(), "Acc/Validation": acc.item()}
         return {"Loss/Validation": loss/n, "Acc/Validation": acc/n}
 
     def eval_step__OLD(self, dataset):
@@ -632,6 +572,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
             reviews.append(r)
 
         # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        # DMARX: why not just replace "8" with self.train_config.microbatch_size then?
         passages = chunkBatchElement(passages[0], 8)
         reviews = chunkBatchElement(reviews[0], 8)
 
