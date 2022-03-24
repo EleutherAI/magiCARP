@@ -103,11 +103,11 @@ class CARPSimRefactor(CARP):
         return outv
 
     def logits_ij_to_loss_ij(self, logits_ij):
-        logger.debug(logits_ij.shape)
+        #logger.debug(logits_ij.shape)
         n = logits_ij.shape[-1]
         labels = torch.arange(n, device=self.config.device)
         loss_ij = F.cross_entropy(logits_ij, labels)
-        logger.debug(loss_ij.shape)
+        #logger.debug(loss_ij.shape) # has no shape, scalar. 
         return loss_ij
 
 
@@ -143,18 +143,18 @@ class CARPSimRefactor(CARP):
         return self.loss_component__mode_i_to_mode_j(x=y,y=x,normalize=normalize, logits_ij=logits_ji)
 
 
-    def contrastive_loss_terms(
-        self, 
-        x, #: TensorType[-1, "latent_dim"], 
-        y, #: TensorType[-1, "latent_dim"],
-        normalize=False,
-        logits_ij=None,
-        logits_ji=None,
-    ) -> TensorType[(), float]:
-
-        loss_ij = self.loss_component__mode_i_to_mode_j(x,y,normalize,logits_ij = logits_ij)
-        loss_ji = self.loss_component__mode_j_to_mode_i(x,y,normalize,logits_ij = logits_ji)
-        return loss_ij, loss_ji
+    #def contrastive_loss_terms(
+    #    self, 
+    #    x, #: TensorType[-1, "latent_dim"], 
+    #    y, #: TensorType[-1, "latent_dim"],
+    #    normalize=False,
+    #    logits_ij=None,
+    #    logits_ji=None,
+    #) -> TensorType[(), float]:
+    #
+    #    loss_ij = self.loss_component__mode_i_to_mode_j(x,y,normalize,logits_ij = logits_ij)
+    #    loss_ji = self.loss_component__mode_j_to_mode_i(x,y,normalize,logits_ij = logits_ji)
+    #    return loss_ij, loss_ji
 
     def loss_components(
         self, 
@@ -179,28 +179,28 @@ class CARPSimRefactor(CARP):
                 loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize, logits_ij=logits_ji)
         return loss_ij, loss_ji
 
-    def contrastive_loss(
-        self, 
-        x=None,
-        y=None,
-        normalize=False,
-        loss_ij=None,
-        loss_ji=None,
-        #use_loss_transpose=True,
-        use_loss_transpose=False,
-        logits_ij=None,
-        logits_ji=None,
-    ) -> TensorType[(), float]:
-        if loss_ij is not None and loss_ji is not None:
-            losses = loss_ij, loss_ji
-        losses = self.loss_components(
-            x=x,y=y, normalize=normalize, 
-            loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
-            logits_ij=logits_ij,
-            logits_ji=logits_ji
-            )
+    # def contrastive_loss(
+    #     self, 
+    #     x=None,
+    #     y=None,
+    #     normalize=False,
+    #     loss_ij=None,
+    #     loss_ji=None,
+    #     #use_loss_transpose=True,
+    #     use_loss_transpose=False,
+    #     logits_ij=None,
+    #     logits_ji=None,
+    # ) -> TensorType[(), float]:
+    #     if loss_ij is not None and loss_ji is not None:
+    #         losses = loss_ij, loss_ji
+    #     losses = self.loss_components(
+    #         x=x,y=y, normalize=normalize, 
+    #         loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
+    #         logits_ij=logits_ij,
+    #         logits_ji=logits_ji
+    #         )
         
-        return sum(losses) / len(losses)
+    #     return sum(losses) / len(losses)
 
     def acc_component__mode_i_to_mode_j(
         self, 
