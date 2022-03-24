@@ -102,6 +102,13 @@ class CARPSimRefactor(CARP):
             outv['acc'] = (torch.argmax(logits_ij, dim=1) == labels).sum() / n
         return outv
 
+    def logits_ij_to_loss_ij(self, logits_ij):
+        logger.debug(logits_ij.shape)
+        n = logits_ij.shape[-1]
+        labels = torch.arange(n, device=self.config.device)
+        return F.cross_entropy(logits_ij, labels)
+
+
 
     def loss_component__mode_i_to_mode_j(
         self, 
@@ -139,10 +146,12 @@ class CARPSimRefactor(CARP):
         x, #: TensorType[-1, "latent_dim"], 
         y, #: TensorType[-1, "latent_dim"],
         normalize=False,
+        logits_ij=None,
+        logits_ji=None,
     ) -> TensorType[(), float]:
 
-        loss_ij = self.loss_component__mode_i_to_mode_j(x,y,normalize)
-        loss_ji = self.loss_component__mode_j_to_mode_i(x,y,normalize)
+        loss_ij = self.loss_component__mode_i_to_mode_j(x,y,normalize,logits_ij = logits_ij)
+        loss_ji = self.loss_component__mode_j_to_mode_i(x,y,normalize,logits_ij = logits_ji)
         return loss_ij, loss_ji
 
     def loss_components(
@@ -165,7 +174,7 @@ class CARPSimRefactor(CARP):
             loss_ji = loss_ij.T
             if not use_loss_transpose:
                 assert not all (obj is None for obj in (x,y))
-                loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize)
+                loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize, logits_ij=logits_ji)
         return loss_ij, loss_ji
 
     def contrastive_loss(
@@ -180,14 +189,15 @@ class CARPSimRefactor(CARP):
         logits_ij=None,
         logits_ji=None,
     ) -> TensorType[(), float]:
-
-        #losses = self.loss_components(
-        #    x=x,y=y, normalize=normalize, 
-        #    loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
-        #    logits_ij=logits_ij,
-        #    logits_ji=logits_ji
-        #    )
-        losses = loss_ij, loss_ji
+        if loss_ij is not None and loss_ji is not None:
+            losses = loss_ij, loss_ji
+        losses = self.loss_components(
+            x=x,y=y, normalize=normalize, 
+            loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
+            logits_ij=logits_ij,
+            logits_ji=logits_ji
+            )
+        
         return sum(losses) / len(losses)
 
     def acc_component__mode_i_to_mode_j(
@@ -349,9 +359,11 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logger.debug(logits_cat.shape) # [batch_size batch_size]
                 #loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
                 logits_ji = torch.cat(logit_chunks_ji.copy())
-                logger.debug(logits_ji.shape)
+                logger.debug(logits_ji.shape) # [batch_size batch_size]
                 #loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
-                loss = (logits_cat + logits_ji)/2
+                loss_ij = self.model.logits_ij_to_loss_ij(logits_cat)
+                loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
+                loss = (loss_ij + loss_ji)/2
                 f_backwards(loss)
             else:
                 logit_chunks_ij.append(logits_ij)
