@@ -106,7 +106,9 @@ class CARPSimRefactor(CARP):
         logger.debug(logits_ij.shape)
         n = logits_ij.shape[-1]
         labels = torch.arange(n, device=self.config.device)
-        return F.cross_entropy(logits_ij, labels)
+        loss_ij = F.cross_entropy(logits_ij, labels)
+        logger.debug(loss_ij.shape)
+        return loss_ij
 
 
 
@@ -462,7 +464,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 config=config,
                 logit_chunks_ij=logits_chunks_ji,
                 #logits_ji=torch.cat(logits_chunks_ij),
-                logits_chunks_ji=logits_chunks_ij,
+                logit_chunks_ji=logits_chunks_ij, # with s or without s??? bad david, bad. pick one.
                 f_backwards=f_backwards,
             )
 
@@ -541,7 +543,10 @@ class CARPSimRefactorTrainer(CARPTrainer):
         # Whatever. leave this here for now.
         with torch.no_grad():
             #loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
-            loss = (logits_ij + logits_ji)/2
+            #loss = (logits_ij + logits_ji)/2
+            loss_ij = self.model.logits_ij_to_loss_ij(logits_ij)
+            loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
+            loss = (loss_ij + loss_ji)/2
             acc = self.model.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
         return {
