@@ -364,10 +364,10 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 temp_logits = logit_chunks_ij.copy()
                 temp_logits[i] = logits_ij
                 logits_cat = torch.cat(temp_logits) # logits_cat.shape -> [batch_size batch_size]
-                logger.debug(logits_cat.shape) # [batch_size batch_size]
+                #logger.debug(logits_cat.shape) # [batch_size batch_size]
                 #loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
                 logits_ji = torch.cat(logit_chunks_ji.copy())
-                logger.debug(logits_ji.shape) # [batch_size batch_size]
+                #logger.debug(logits_ji.shape) # [batch_size batch_size]
                 #loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
                 loss_ij = self.model.logits_ij_to_loss_ij(logits_cat)
                 loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
