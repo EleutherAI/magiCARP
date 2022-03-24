@@ -78,8 +78,8 @@ class CARPSimRefactor(CARP):
 
     def _compute_loss_or_acc(
         self, 
-        x, #: TensorType[-1, "latent_dim"], 
-        y, #: TensorType[-1, "latent_dim"],
+        x=None, #: TensorType[-1, "latent_dim"], 
+        y=None, #: TensorType[-1, "latent_dim"],
         normalize=False,
         logits_ij = None,
         return_loss = True,
@@ -87,9 +87,9 @@ class CARPSimRefactor(CARP):
     ):
         if isinstance(logits_ij, list):
             logits_ij = torch.cat(logits_ij)
-        try:
+        if x is not None:
             n = x.shape[0]
-        except AttributeError:
+        else:
             n = logits_ij.shape[-1] # NB: n should correspond to batch_size, not microbatch_size
         labels = torch.arange(n, device=self.config.device)
         
@@ -110,6 +110,7 @@ class CARPSimRefactor(CARP):
         normalize=False,
         logits_ij = None,
     ) -> TensorType[(), float]:
+        assert not all (obj is None for obj in (x,y,logits_ij))
 
         d = self._compute_loss_or_acc(
             x=x,
@@ -129,6 +130,7 @@ class CARPSimRefactor(CARP):
         normalize=False,
         logits_ji = None,
     ) -> TensorType[(), float]:
+        assert not all (obj is None for obj in (x,y,logits_ji))
         return self.loss_component__mode_i_to_mode_j(x=y,y=x,normalize=normalize, logits_ij=logits_ji)
 
 
@@ -150,16 +152,20 @@ class CARPSimRefactor(CARP):
         normalize=False,
         loss_ij=None,
         loss_ji=None,
-        use_loss_transpose=True,
+        #use_loss_transpose=True,
+        use_loss_transpose=False,
         logits_ij=None,
         logits_ji=None,
     ):
+        assert not all (obj is None for obj in (x,y,logits_ij, logits_ji))
         if loss_ij is None:
+            assert not all (obj is None for obj in (x,y))
             loss_ij = self.loss_component__mode_i_to_mode_j(x=x,y=y,normalize=normalize, logits_ij=logits_ij)
         if loss_ji is None:
             loss_ji = loss_ij.T
             if not use_loss_transpose:
-                loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize, logits_ji=logits_ji)
+                assert not all (obj is None for obj in (x,y))
+                loss_ji = self.loss_component__mode_j_to_mode_i(x=x,y=y,normalize=normalize)
         return loss_ij, loss_ji
 
     def contrastive_loss(
@@ -169,7 +175,8 @@ class CARPSimRefactor(CARP):
         normalize=False,
         loss_ij=None,
         loss_ji=None,
-        use_loss_transpose=True,
+        #use_loss_transpose=True,
+        use_loss_transpose=False,
         logits_ij=None,
         logits_ji=None,
     ) -> TensorType[(), float]:
@@ -293,7 +300,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
         encoder_no_grad: nn.Module,
         logits_func: Callable,
         config: TrainConfig,
-        logit_chunks=None,
+        logit_chunks_ij=None,
+        logits_ji=None,
         f_backwards=None,
     ):
         microbatch_inds = generate_indices(
@@ -319,8 +327,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
         ]
 
         compute_loss = True
-        if logit_chunks is None:
-            logit_chunks = []
+        if logit_chunks_ij is None:
+            logit_chunks_ij = []
             compute_loss = False
         for i, item in enumerate(mbs_w_grad):
             with torch.cuda.amp.autocast():
@@ -328,19 +336,43 @@ class CARPSimRefactorTrainer(CARPTrainer):
 
             logits_ij_list = [logits_func(enc_i, enc_no_grad) 
                 for enc_no_grad in mbs_enc_no_grad]
-
+            #logger.debug(len(logits_ij_list))
             logits_ij = torch.cat(logits_ij_list, dim=-1) # [microbatch_size batch_size]
 
             if compute_loss:
-                temp_logits = logit_chunks.copy()
+                temp_logits = logit_chunks_ij.copy()
                 temp_logits[i] = logits_ij
                 logits_cat = torch.cat(temp_logits) # logits_cat.shape -> [batch_size batch_size]
-
-                loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
+                logger.debug(logits_cat.shape) # [batch_size batch_size]
+                #loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
+                loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
                 f_backwards(loss)
             else:
-                logit_chunks.append(logits_ij)
-        return logit_chunks
+                logit_chunks_ij.append(logits_ij)
+        return logit_chunks_ij
+    
+    def microbatch_up_logits__mode_j_to_mode_i(
+        self,
+        mode_w_grad: BatchElement,
+        mode_no_grad: BatchElement,
+        encoder_w_grad: nn.Module,
+        encoder_no_grad: nn.Module,
+        logits_func: Callable,
+        config: TrainConfig,
+        logit_chunks=None,
+        f_backwards=None,
+    ):
+
+        return self.microbatch_up_logits__mode_i_to_mode_j(
+            mode_w_grad=mode_no_grad,
+            mode_no_grad=mode_w_grad,
+            encoder_w_grad=encoder_no_grad,
+            encoder_no_grad=encoder_w_grad,
+            logits_func=logits_func,
+            config=config,
+            logit_chunks=logit_chunks,
+            f_backwards=f_backwards,
+        )
 
     def _inner_step(self,
         mode_w_grad: BatchElement,
@@ -349,7 +381,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
         f_backwards=None,
     ):
 
-        # 1. Build up logits_ij
+        # 1. Build up logits no grad
         logger.debug("building logits_ij no grad")
         with torch.no_grad():
             logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
@@ -362,8 +394,30 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logit_chunks=None,
                 f_backwards=None,
             )
-        #logger.debug(type(logits_chunks_ij))
-        #logger.debug(len(logits_chunks_ij))
+
+        logger.debug("building logits_ji no grad")
+        with torch.no_grad():
+            # do i have this right? getting confused w ij, ji, x=y...
+            #logits_chunks_ji = self.microbatch_up_logits__mode_j_to_mode_i(
+            #    mode_w_grad=mode_w_grad,
+            #    mode_no_grad=mode_no_grad,
+            #    encoder_w_grad=self.model.encode_passages,
+            #    encoder_no_grad=self.model.encode_reviews,
+            #    logits_func=self.model.item_logits__mode_j_to_mode_i,
+            #    config=config,
+            #    logit_chunks=None,
+            #    f_backwards=None,
+            #)
+            logits_chunks_ji = self.microbatch_up_logits__mode_i_to_mode_j(
+                mode_w_grad=mode_no_grad,
+                mode_no_grad=mode_w_grad,
+                encoder_w_grad=self.model.encode_reviews,
+                encoder_no_grad=self.model.encode_passages,
+                logits_func=self.model.item_logits__mode_i_to_mode_j,
+                config=config,
+                logit_chunks=None,
+                f_backwards=None,
+            )
         
         # 2. Ok, again but this time with grad and loss....
         logger.debug("building logits_ij with grad")
@@ -374,11 +428,26 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 encoder_no_grad=self.model.encode_reviews,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                logit_chunks=logits_chunks_ij,
+                logit_chunks_ij=logits_chunks_ij,
+                logits_ji=torch.cat(logits_chunks_ji),
                 f_backwards=f_backwards,
             )
         
-        return logits_chunks_ij
+        logger.debug("building logits_ji with grad")
+        logits_chunks_ij = self.microbatch_up_logits__mode_i_to_mode_j(
+                mode_w_grad=mode_no_grad,
+                mode_no_grad=mode_w_grad,
+                encoder_w_grad=self.model.encode_reviews,
+                encoder_no_grad=self.model.encode_passages,
+                logits_func=self.model.item_logits__mode_i_to_mode_j,
+                config=config,
+                logit_chunks_ij=logits_chunks_ji,
+                logits_ji=torch.cat(logits_chunks_ij),
+                f_backwards=f_backwards,
+            )
+
+        #return logits_chunks_ij, logits_chunks_ji
+        return torch.cat(logits_chunks_ij), torch.cat(logits_chunks_ji)
     
     def train_deepspeed_step(
         self,
@@ -387,19 +456,20 @@ class CARPSimRefactorTrainer(CARPTrainer):
         config: TrainConfig,
     ):
         with self.autocast():
-            logits_ij = self._inner_step(
+            #logits_ij = self._inner_step(
+            logits_ij, logits_ji = self._inner_step(
                 mode_w_grad=passages,
                 mode_no_grad=reviews,
                 config=config,
                 f_backwards= self.deepspeed_backwards,
             )
         
-            logits_ji = self._inner_step(
-                mode_w_grad=reviews,
-                mode_no_grad=passages,
-                config=config,
-                f_backwards= self.deepspeed_backwards,
-            )
+            #logits_ji = self._inner_step(
+            #    mode_w_grad=reviews,
+            #    mode_no_grad=passages,
+            #    config=config,
+            #    f_backwards= self.deepspeed_backwards,
+            #)
         
         self.average_gradients()
         self.clip_gradients()
@@ -423,19 +493,20 @@ class CARPSimRefactorTrainer(CARPTrainer):
     ):
         self.zero_grad()
         with self.autocast():
-            logits_ij = self._inner_step(
+            #logits_ij = self._inner_step(
+            logits_ij, logits_ji = self._inner_step(
                 mode_w_grad=passages,
                 mode_no_grad=reviews,
                 config=config,
                 f_backwards= self.torch_backwards,
             )
         
-            logits_ji = self._inner_step(
-                mode_w_grad=reviews,
-                mode_no_grad=passages,
-                config=config,
-                f_backwards= self.torch_backwards,
-            )
+            #logits_ji = self._inner_step(
+            #    mode_w_grad=reviews,
+            #    mode_no_grad=passages,
+            #    config=config,
+            #    f_backwards= self.torch_backwards,
+            #)
         
         self.average_gradients()
         self.clip_gradients()
