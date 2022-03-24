@@ -63,7 +63,6 @@ class CARPSimRefactor(CARP):
         x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"],
         normalize=False,
-    #) -> TensorType["batch_size", "batch_size"]:
     ) -> TensorType:
         S_ij = self.item_divergence__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
         return S_ij * self.logit_scale.exp()
@@ -73,9 +72,7 @@ class CARPSimRefactor(CARP):
         x, #: TensorType[-1, "latent_dim"],
         y, #: TensorType[-1, "latent_dim"],
         normalize=False,
-        #) -> TensorType["batch_size", "batch_size"]:
         ) -> TensorType:
-        #return self.item_logits__mode_i_to_mode_j(x=y,y=x,normalize=normalize)
         S_ji = self.item_divergence__mode_j_to_mode_i(x=x,y=y,normalize=normalize)
         return S_ji * self.logit_scale.exp()
 
