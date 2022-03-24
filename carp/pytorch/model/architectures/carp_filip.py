@@ -225,28 +225,6 @@ class CARPSimRefactor(CARP):
         return (acc_ij + acc_ji) / 2
 
 
-    # Is there a way we can inherit the typing from a method's output?
-    def compute_accuracy_OLD(
-        self, 
-        x=None,
-        y=None,
-        normalize=False,
-        loss_ij=None,
-        loss_ji=None,
-        use_loss_transpose=True,
-    ) -> TensorType[(), float]:
-        losses = self.loss_components(x=x,y=y, normalize=normalize, loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose)
-        with torch.no_grad():
-            n = x.shape[0]
-            labels = torch.arange(n, device=self.config.device)
-            
-            logits_ij = self.item_logits__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
-            logits_ji = self.item_logits__mode_j_to_mode_i(x=x,y=y,normalize=normalize)
-            acc_ij = (torch.argmax(logits_ij, dim=1) == labels).sum()
-            acc_ji = (torch.argmax(logits_ji, dim=1) == labels).sum()
-        return (acc_ij + acc_ji) / n / 2
-
-
 @typechecked
 @register_architecture
 @typechecked
