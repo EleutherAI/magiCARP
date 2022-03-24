@@ -31,25 +31,30 @@ class CARPSimRefactor(CARP):
     over similarity computations that aren't microbatched in the current base CARP. It should 
     behave numerically equivalent to the unmodified parent class.
     """
-    def item_pseudosimilarity__mode_i_to_mode_j(
+    def item_divergence__mode_i_to_mode_j(
         self,
         x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"],
         normalize=False,
     ):
         """
-        "pseudo" similarity to permit asymmetric and mode-specifice simmilarity measures
+        Returns a score comparing item x to item y. For most purposes this
+        will be a similarity or distance metric, i.e. divergence(x,y) = divergence(y,x).
         """
         return self.cosine_sim(x, y, normalize)
 
-    def item_pseudosimilarity__mode_j_to_mode_i(
+    def item_divergence__mode_j_to_mode_i(
         self,
         x, #: TensorType[-1, "latent_dim"],
         y, #: TensorType[-1, "latent_dim"],
         normalize=False,
     ):
         """
-        "pseudo" similarity to permit asymmetric and mode-specifice simmilarity measures
+        Returns a score comparing item x to item y. For most purposes this
+        will be a similarity or distance metric, i.e. divergence(x,y) = divergence(y,x).
+        Defaults behavior assumes a symmetric divergence measure. If this is not
+        the case, be sure to override this function. If this function is not overridden,
+        item_divergence__mode_i_to_mode_j(y,x) will be used to compute the j->i divergence.
         """
         return self.item_pseudosimilarity__mode_i_to_mode_j(x=y,y=x, normalize=normalize)
 
