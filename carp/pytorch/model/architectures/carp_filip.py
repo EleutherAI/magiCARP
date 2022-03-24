@@ -181,12 +181,13 @@ class CARPSimRefactor(CARP):
         logits_ji=None,
     ) -> TensorType[(), float]:
 
-        losses = self.loss_components(
-            x=x,y=y, normalize=normalize, 
-            loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
-            logits_ij=logits_ij,
-            logits_ji=logits_ji
-            )
+        #losses = self.loss_components(
+        #    x=x,y=y, normalize=normalize, 
+        #    loss_ij=loss_ij, loss_ji=loss_ji, use_loss_transpose=use_loss_transpose,
+        #    logits_ij=logits_ij,
+        #    logits_ji=logits_ji
+        #    )
+        losses = loss_ij, loss_ji
         return sum(losses) / len(losses)
 
     def acc_component__mode_i_to_mode_j(
@@ -301,7 +302,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
         logits_func: Callable,
         config: TrainConfig,
         logit_chunks_ij=None,
-        logits_ji=None,
+        logit_chunks_ji=None,
+        #logits_ji=None,
         f_backwards=None,
     ):
         microbatch_inds = generate_indices(
@@ -340,12 +342,16 @@ class CARPSimRefactorTrainer(CARPTrainer):
             logits_ij = torch.cat(logits_ij_list, dim=-1) # [microbatch_size batch_size]
 
             if compute_loss:
+                assert logit_chunks_ji is not None
                 temp_logits = logit_chunks_ij.copy()
                 temp_logits[i] = logits_ij
                 logits_cat = torch.cat(temp_logits) # logits_cat.shape -> [batch_size batch_size]
                 logger.debug(logits_cat.shape) # [batch_size batch_size]
                 #loss = self.model.contrastive_loss(logits_ij=logits_cat) # probably cheating a bit here just assuming we can use the transpose.....
-                loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
+                logits_ji = torch.cat(logit_chunks_ji.copy())
+                logger.debug(logits_ji.shape)
+                #loss = self.model.contrastive_loss(logits_ij=logits_cat, logits_ji=logits_ji)
+                loss = (logits_cat + logits_ji)/2
                 f_backwards(loss)
             else:
                 logit_chunks_ij.append(logits_ij)
@@ -391,8 +397,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 encoder_no_grad=self.model.encode_reviews,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                logit_chunks=None,
-                f_backwards=None,
+                #logit_chunks=None,
+                #f_backwards=None,
             )
 
         logger.debug("building logits_ji no grad")
@@ -415,8 +421,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 encoder_no_grad=self.model.encode_passages,
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
-                logit_chunks=None,
-                f_backwards=None,
+                #logit_chunks=None,
+                #f_backwards=None,
             )
         
         # 2. Ok, again but this time with grad and loss....
@@ -429,7 +435,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
                 logit_chunks_ij=logits_chunks_ij,
-                logits_ji=torch.cat(logits_chunks_ji),
+                #logits_ji=torch.cat(logits_chunks_ji),
+                logit_chunks_ji=logits_chunks_ji,
                 f_backwards=f_backwards,
             )
         
@@ -442,7 +449,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 logits_func=self.model.item_logits__mode_i_to_mode_j,
                 config=config,
                 logit_chunks_ij=logits_chunks_ji,
-                logits_ji=torch.cat(logits_chunks_ij),
+                #logits_ji=torch.cat(logits_chunks_ij),
+                logits_chunks_ji=logits_chunks_ij,
                 f_backwards=f_backwards,
             )
 
@@ -476,7 +484,8 @@ class CARPSimRefactorTrainer(CARPTrainer):
         self.deepspeed_step()
 
         with torch.no_grad():
-            loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            #loss = self.model.module.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            loss = (logits_ij + logits_ji)/2
             acc = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
         return {
@@ -512,8 +521,15 @@ class CARPSimRefactorTrainer(CARPTrainer):
         self.clip_gradients()
         self.torch_step()
 
+        # this is unnecessarily duplicated here.
+        # let's move the "if compute loss" stuff here maybe?
+        # or move them both to _inner step and return thos values up to this scope
+        # instead of returning the logits? yeah that makes sense.
+        # ... I think maybe I don't need an inner step though...
+        # Whatever. leave this here for now.
         with torch.no_grad():
-            loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            #loss = self.model.contrastive_loss(logits_ij=logits_ij, logits_ji=logits_ji)
+            loss = (logits_ij + logits_ji)/2
             acc = self.model.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
 
         return {
