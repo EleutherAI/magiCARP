@@ -56,7 +56,7 @@ class CARPSimRefactor(CARP):
         the case, be sure to override this function. If this function is not overridden,
         item_divergence__mode_i_to_mode_j(y,x) will be used to compute the j->i divergence.
         """
-        return self.item_pseudosimilarity__mode_i_to_mode_j(x=y,y=x, normalize=normalize)
+        return self.item_divergence__mode_i_to_mode_j(x=y,y=x, normalize=normalize)
 
     def item_logits__mode_i_to_mode_j(
         self,
@@ -65,7 +65,7 @@ class CARPSimRefactor(CARP):
         normalize=False,
     #) -> TensorType["batch_size", "batch_size"]:
     ) -> TensorType:
-        S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
+        S_ij = self.item_divergence__mode_i_to_mode_j(x=x,y=y,normalize=normalize)
         return S_ij * self.logit_scale.exp()
     
     def item_logits__mode_j_to_mode_i(
@@ -251,7 +251,7 @@ class CARPSimRefactor(CARP):
 @register_architecture
 class CARPFilip(CARPSimRefactor):
 
-    def item_pseudosimilarity__mode_i_to_mode_j(
+    def item_divergence__mode_i_to_mode_j(
         self,
         x: TensorType["microbatch_size", -1, "latent_dim"],
         y: TensorType["microbatch_size", -1, "latent_dim"],
@@ -300,7 +300,7 @@ class CARPFilip(CARPSimRefactor):
             y: TensorType["microbatch_size", -1, "latent_dim"],
             normalize=True,
         ):
-        S_ij = self.item_pseudosimilarity__mode_i_to_mode_j(x,y,normalize)
+        S_ij = self.item_divergence__mode_i_to_mode_j(x,y,normalize)
         logits_ij = S_ij * self.logit_scale.exp()
         return logits_ij.max(dim=-1).values.mean(dim=-1)
 
