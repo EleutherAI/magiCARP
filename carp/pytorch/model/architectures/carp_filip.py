@@ -394,7 +394,7 @@ class CARPSimRefactorTrainer(CARPTrainer):
             f_backwards=f_backwards,
         )
 
-    def _inner_step(self,
+    def compute_logits_no_grad(self,
         mode_w_grad: BatchElement,
         mode_no_grad: BatchElement,
         config: TrainConfig,
@@ -438,6 +438,20 @@ class CARPSimRefactorTrainer(CARPTrainer):
                 #logit_chunks=None,
                 #f_backwards=None,
             )
+        return logits_chunks_ij, logits_chunks_ji
+
+    def _inner_step(self,
+        mode_w_grad: BatchElement,
+        mode_no_grad: BatchElement,
+        config: TrainConfig,
+        f_backwards=None,
+    ):
+
+        logits_chunks_ij, logits_chunks_ji = self.compute_logits_no_grad(
+            mode_w_grad=mode_w_grad,
+            mode_no_grad=mode_no_grad,
+            config=config,
+        )
         
         # 2. Ok, again but this time with grad and loss....
         logger.debug("building logits_ij with grad")
@@ -555,4 +569,81 @@ class CARPSimRefactorTrainer(CARPTrainer):
             "Model/logit_scale": self.model.logit_scale.sum(),
         }
 
+    def eval_step(self, dataset):
+        """
+        Runs a single evaluation step on the model.
+        Args:
+            dataset: the validation dataset
+        Returns:
+            dict: Dictionary of validation loss and validation accuracy
+        """
+        #passages = []
+        #reviews = []
+        #for p, r in dataset:
+        #    passages.append(p)
+        #    reviews.append(r)
+
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        #passages = chunkBatchElement(passages[0], 8)
+        #reviews = chunkBatchElement(reviews[0], 8)
+        loss = 0
+        acc = 0
+        n=0
+        for passages, reviews in dataset:
+            with torch.no_grad():
+                logits_chunks_ij, logits_chunks_ji = self.compute_logits_no_grad(
+                    mode_w_grad=passages,#: BatchElement,
+                    mode_no_grad=reviews,#: BatchElement,
+                    #config=config,#: TrainConfig,
+                    # uh... why not just do this?
+                    config=self.train_config,
+                    #f_backwards=None,
+                )
+                logits_ij, logits_ji = torch.cat(logits_chunks_ij), torch.cat(logits_chunks_ji)
+                loss_k = (logits_ij + logits_ji)/2
+                acc_k = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+                loss += loss_k.item()
+                acc += acc_k.item()
+        #return {"Loss/Validation": loss.item(), "Acc/Validation": acc.item()}
+        return {"Loss/Validation": loss/n, "Acc/Validation": acc/n}
+
+    def eval_step__OLD(self, dataset):
+        """
+        Runs a single evaluation step on the model.
+        Args:
+            dataset: the validation dataset
+        Returns:
+            dict: Dictionary of validation loss and validation accuracy
+        """
+        passages = []
+        reviews = []
+        for p, r in dataset:
+            passages.append(p)
+            reviews.append(r)
+
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        reviews = chunkBatchElement(reviews[0], 8)
+
+        with no_grad():
+            if self.use_deepspeed:
+                pass_emb, rev_emb = self.model.module.calculate_embeddings(
+                    passages, reviews
+                )
+                val_loss = self.model.module.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.module.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+            else:
+                pass_emb, rev_emb = self.model.calculate_embeddings(passages, reviews)
+                val_loss = self.model.contrastive_loss(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+                val_acc = self.model.compute_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
+
+        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
 
