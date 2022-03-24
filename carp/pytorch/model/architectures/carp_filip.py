@@ -318,8 +318,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
         #logits_ji=None,
         f_backwards=None,
     ):
+        # this... doesn't go here.
+        batch_size = config.batch_size
+        if not self.model.training:
+            batch_size = config.validation_size
+
         microbatch_inds = generate_indices(
-            config.batch_size, #mode_w_grad.input_ids.shape[0],
+            #config.batch_size, #mode_w_grad.input_ids.shape[0],
+            batch_size,
             config.microbatch_size, 
             shuffle=False
         )
@@ -600,10 +606,14 @@ class CARPSimRefactorTrainer(CARPTrainer):
                     #f_backwards=None,
                 )
                 logits_ij, logits_ji = torch.cat(logits_chunks_ij), torch.cat(logits_chunks_ji)
-                loss_k = (logits_ij + logits_ji)/2
-                acc_k = self.model.module.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
+                #loss_k = (logits_ij + logits_ji)/2
+                loss_ij = self.model.logits_ij_to_loss_ij(logits_ij)
+                loss_ji = self.model.logits_ij_to_loss_ij(logits_ji)
+                loss_k = (loss_ij + loss_ji)/2
+                acc_k = self.model.compute_accuracy(logits_ij=logits_ij, logits_ji=logits_ji)
                 loss += loss_k.item()
                 acc += acc_k.item()
+                n+=1
         #return {"Loss/Validation": loss.item(), "Acc/Validation": acc.item()}
         return {"Loss/Validation": loss/n, "Acc/Validation": acc/n}
 
