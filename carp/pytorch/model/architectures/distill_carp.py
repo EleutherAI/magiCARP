@@ -21,7 +21,7 @@ class DistillCARP(BaseModel):
 
 	def _reduction(self, logits: TensorType["pass_N", "rev_N"]) -> TensorType["pass_N", "reduced_rev_N"]:
 		n = logits.shape[0]
-		logits = torch.sum(logits.reshape((n,-1,self.reviews_per_passage)), dim=-1)
+		logits = torch.sum(logits.reshape((n,-1,self.reviews_per_passage)), dim=-1) / float(self.reviews_per_passage)
 		return logits
 
 	def compute_accuracy(self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]):
@@ -46,15 +46,15 @@ class DistillCARP(BaseModel):
 		# small term added to avoid nans in low precision softmax
 		#(num_passages, num_reviews)
 		logits = self.cosine_sim(x,y) * self.logit_scale.exp()
+		logits = self._reduction(logits)
+		
 		logits_i = F.softmax(logits, dim=-1)
 		logits_t = F.softmax(logits, dim=0)
-		reduced_logits_i = self._reduction(logits_i)
-		reduced_logits_t = self._reduction(logits_t)
+
 		#Reduce logits into diagonal
 		labels = torch.arange(n, device=self.config.device)
-		loss_i = F.nll_loss(torch.log(reduced_logits_i), labels)
-		loss_t = F.nll_loss(torch.log(reduced_logits_t.T), labels)
-		#print(loss_i, loss_t)
+		loss_i = F.nll_loss(torch.log(logits_i), labels)
+		loss_t = F.nll_loss(torch.log(logits_t.T), labels)
 		return (loss_i + loss_t) / 2
 
 
@@ -67,7 +67,6 @@ class DistillCARP(BaseModel):
 		scaler: torch.cuda.amp.GradScaler,
 	) -> Dict[str, TensorType[()]]:
 
-		#print('train_step reviews', reviews.input_ids.size())
 		self.reviews_per_passage = reviews.input_ids.size()[0] // passages.input_ids.size()[0]
 
 		microbatch_inds_passages = generate_indices(
@@ -89,7 +88,6 @@ class DistillCARP(BaseModel):
 		# Initially get all encodings without grad
 		pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
 
-		#print('rev_encs size', len(rev_encs))
 
 		#compute accuracy
 		forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))

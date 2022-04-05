@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="UnattendedHostPersistenceState">
+    <option name="openedFilesInfos">
+      <list>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/README.md" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="2068" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/carp/pytorch/data/distill_pipeline.py" />
+        </OpenedFileInfo>
+      </list>
+    </option>
+  </component>
+</project>
