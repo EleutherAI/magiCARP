@@ -119,6 +119,7 @@ class BaseDataPipeline(Dataset):
 
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
+from carp.pytorch.data.metalabel_pipeline import MetalabelDataPipeline
 
 
 def get_datapipeline(name):
