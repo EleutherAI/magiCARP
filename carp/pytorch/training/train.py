@@ -67,10 +67,10 @@ def get_model(
     if load_checkpoint:
         model.load(ckpt_path)
         print_rank_0("Checkpoint loaded!")
-    
+
     if not multi_gpu:
         model.to(config.model.device)
-    else: 
+    else:
         model.cuda()
 
     if config.train_job.use_half:
@@ -217,6 +217,7 @@ def train(
                 print_rank_0("VALIDATING...")
                 trainer.model.eval()
                 trainer.before_validate_step()
+                #TODO: Make less slow
                 eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus, is_train=False)
 
                 eval_out = trainer.eval_step(eval_data)

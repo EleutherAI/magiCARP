@@ -20,7 +20,7 @@ class PromptLayer(nn.Module):
         encoder: BaseEncoder,
         labels: List[str] = None,
         n_ctx: int = 10,
-        ctx_dim: int = 1024,
+        ctx_dim: int = 768,
     ):
         super().__init__()
         if labels is None:
@@ -115,13 +115,14 @@ class CARPCoOp(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
         self.config = config
-        self.review_encoder_CoOp = PromptLayer(self.review_encoder)
+        self.review_encoder_CoOp = PromptLayer(self.review_encoder, labels=config.labels)
 
         # required for CoOp
         self.freeze_encoders()
 
     # freezes encoder and projection layer
     def freeze_encoders(self):
+        self.logit_scale.requires_grad_(False)
         for params in self.passage_encoder.parameters():
             params.requires_grad_(False)
         for params in self.review_encoder.parameters():
@@ -151,12 +152,9 @@ class CARPCoOp(BaseModel):
         return_only_embeddings: bool = True,
     ):
         # Get encodings without grad
-        #TODO: no self. autocast
-        with no_grad(), torch.cuda.amp.autocast(): #self.autocast():
+        with no_grad():
             pass_encs = [self.encode_passages(p) for p in passages]
-
-        with torch.cuda.amp.autocast():# self.autocast():
-            rev_encs = self.encode_reviews()
+        rev_encs = self.encode_reviews()
 
         # if we only need the embeddings, fetch them
         if return_only_embeddings:
@@ -265,6 +263,7 @@ class CARPCoOp(BaseModel):
             "pass_encs": pass_encs,
             "rev_encs": rev_encs,
             "forward_acc": forward_acc,
+            "rev_labels": rev_labels
         }
 
 
@@ -276,13 +275,14 @@ class CARPCoOpTrainer(BaseTrainer):
         reviews: ScarecrowTargetElement,
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
-        forward_output = self.model(passages, reviews, config)
+        with self.autocast():
+            forward_output = self.model(passages, reviews, config)
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            #TODO: No self autocast
-            with torch.cuda.amp.autocast():#self.autocast():
+            #Trainer object does seem to have autocast
+            with self.autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
             loss = self.model.module.CoOp_loss(
@@ -317,18 +317,19 @@ class CARPCoOpTrainer(BaseTrainer):
 
         # does gradient accumulation
         self.zero_grad()
+        tempered_rev_labels = F.softmax(torch.cat(forward_output["rev_labels"])**self.train_config.temp, dim=-1)
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            #TODO: No self autocast
-            with torch.cuda.amp.autocast(): #self.autocast():
+
+            with self.autocast():
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
-                loss = self.model.CoOp_loss(
-                    torch.cat(pass_tmp),
-                    forward_output["rev_encs"],
-                    torch.cat(forward_output["rev_labels"]),
-                )
+            loss = self.model.CoOp_loss(
+                torch.cat(pass_tmp),
+                forward_output["rev_encs"],
+                tempered_rev_labels,
+            )
 
             self.torch_backwards(loss)
 
@@ -345,3 +346,23 @@ class CARPCoOpTrainer(BaseTrainer):
             "Loss/Train": loss,
             "Acc/Forward": forward_output["forward_acc"],
         }
+
+    def eval_step(self, dataset):
+        passages = []
+        reviews = []
+        for p, r in dataset:
+            passages.append(p)
+            reviews.append(r)
+
+        # TODO: Ideally should get microbatch size from trainconfig for the second argument
+        passages = chunkBatchElement(passages[0], 8)
+        rev_labels = torch.cat(
+            list(map(lambda x: x.target_dist.cuda(), reviews)), dim=0
+        )
+
+        with no_grad():
+            pass_emb, rev_emb = self.model.calculate_embeddings(passages)
+            val_loss = self.model.CoOp_loss(torch.cat(pass_emb), rev_emb, rev_labels)
+            val_acc = self.model.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
+
+        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
