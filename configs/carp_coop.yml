@@ -7,6 +7,7 @@ model:
   encoder_type: "SumTextEncoder"
   momentum: 0.0
   device: "cuda"
+  labels: ["Off-prompt", "Grammar Usage", "Needs Google", "Incoherent", "Technical Jargon", "Redundant"]
 
 train_job:
   n_ctx: 512

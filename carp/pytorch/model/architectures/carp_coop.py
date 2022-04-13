@@ -20,7 +20,7 @@ class PromptLayer(nn.Module):
         encoder: BaseEncoder,
         labels: List[str] = None,
         n_ctx: int = 10,
-        ctx_dim: int = 768,
+        ctx_dim: int = 1024,
     ):
         super().__init__()
         if labels is None:
