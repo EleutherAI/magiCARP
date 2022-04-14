@@ -37,7 +37,7 @@ def load_encs(path):
 def save_encs(encs, path):
     torch.save(encs, path)
 
-def enc_reviews():
+def enc_reviews(N_SAMPLES = N_SAMPLES, force_fresh = True, ind_path = "metalabel_data/embedding_inds.pt", enc_path = "metalabel_data/review_encs.pt", random_state = 0):
     print("Load Model")
     config = CARPConfig.load_yaml("configs/carp_cloob.yml")
     cloob_model = CARPCloob(config.model)
@@ -59,17 +59,17 @@ def enc_reviews():
     
     # Load a previous run by loading indices then encodings if that works
     try:
-        assert False
-        inds = torch.load("metalabel_data/embedding_inds.pt")
+        assert not force_fresh
+        inds = torch.load(ind_path)
         assert len(inds) == N_SAMPLES
 
-        review_encs = load_encs("metalabel_data/review_encs.pt").half()
+        review_encs = load_encs(enc_path).half()
         crnt_ind = len(review_encs) # which review in inds are we at?
     except:
         # generate indices of the reviews we will use
-        torch.manual_seed(0)
+        torch.manual_seed(random_state)
         inds = torch.randperm(N)[:N_SAMPLES]
-        torch.save(inds, "metalabel_data/embedding_inds.pt")
+        torch.save(inds, ind_path)
 
         review_encs = torch.zeros(0, LATENT_DIM).half()
         crnt_ind = 0
@@ -96,12 +96,11 @@ def enc_reviews():
         return encs
     
     def save():
-        save_encs(review_encs, "metalabel_data/review_encs.pt")
+        save_encs(review_encs, enc_path)
     
     # iterate through chunks
     while crnt_ind < N_SAMPLES:
         which_chunk = crnt_ind // CHUNK_SIZE
-        print(which_chunk)
         inds = ind_chunks[which_chunk]
 
         # Get chunk and encode it
@@ -119,4 +118,4 @@ def enc_reviews():
     save()
 
 if __name__ == "__main__":
-    enc_reviews()
+    enc_reviews(force_fresh=False)
