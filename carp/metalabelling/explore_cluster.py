@@ -80,7 +80,11 @@ def make_captions(labels, samples_per = 15):
 
         # Randomly sample some reviews that match this label
         l_reviews = [reviews[i] for i in where_l]
-        random.shuffle(l_reviews)
+        
+        # print the shortest reviews so its faster t
+        kvps = [(len(rev), rev) for rev in l_reviews]
+        kvps.sort(key = lambda kvp: kvp[0])
+        l_reviews = [kvp[1] for kvp in kvps] 
 
         n_samples =  min(len(where_l), samples_per)
         for rev in l_reviews[:n_samples]:
@@ -142,5 +146,3 @@ if __name__ == "__main__":
     print(label_props)
 
     make_captions(labels)
-
-
