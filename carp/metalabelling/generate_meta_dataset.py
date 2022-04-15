@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn.functional as f
 import numpy as np
 import joblib
 import hdbscan
@@ -14,11 +15,11 @@ except:
     print("One or more pre-req files were not found")
     print("Ensure you run carp.metalabelling.get_centroids")
 
-
-# Load dataset
-print("Load Dataset...")
-pipeline = BaseDataPipeline(path="carp/dataset")
-passages = pipeline.passages[:-1000] # dont take validation set from training
+if __name__ == "__main__":
+    # Load dataset
+    print("Load Dataset...")
+    pipeline = BaseDataPipeline(path="carp/dataset")
+    passages = pipeline.passages[:-1000] # dont take validation set from training
 
 # We observed that previously, ~50% of reviews were unlabelled by HDBSCAN
 # Assuming a random sample of (passage, review) pairs, and assuming reviews used
@@ -64,15 +65,24 @@ if remove_unclassified:
 
 import pandas as pd
 
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # get classifier distribution from centroids
-def get_dist(review_encs, centroids):
+# gets cosine similarity for each sample with each centroid
+def get_cos_sims(review_encs, centroids):
     # review_encs: [n, d]
     # centroids: [k, d]
-    diffs = review_encs[:,None,:] - centroids[None,:] # [n, k, d]
-    dist = torch.norm(diffs, dim = 2) # [n, k]
-    return dist
+    review_encs = review_encs.to(device) # cuda speeds up the matmult
+    centroids = centroids.to(device)
+
+    centroid_norms = torch.norm(centroids, dim = 1) # [k]
+    review_norms = torch.norm(review_encs, dim = 1) # [n]
+
+    norm_scale = centroid_norms[None,:] * review_norms[:,None] # [n, k]
+
+    cos_sims = review_encs @ centroids.t() / norm_scale # [n, k]
+
+    return cos_sims.cpu()
 
 import pandas as pd
 
@@ -92,10 +102,10 @@ def make_csv_dataset(review_encs, centroids, mode = "pos"):
 
     n_labels = len(means)
 
-    chunk_size = 1024
+    chunk_size = 1024 * 8
 
     rev_chunks = chunk(review_encs, chunk_size)
-    probs = torch.cat([get_dist(rev, means) for rev in rev_chunks])
+    probs = torch.cat([get_cos_sims(rev, means) for rev in rev_chunks])
     #for i in range(probs.shape[1]):
     #    s = str(i)
     #    df[s] = probs[:,i]
@@ -103,5 +113,6 @@ def make_csv_dataset(review_encs, centroids, mode = "pos"):
     df.to_csv("metalabel_data/dataset.csv")
     torch.save(probs, "metalabel_data/dataset_centroid_dists_{}.pt".format(mode))
 
-make_csv_dataset(review_encs, centroids, mode = "pos")
-make_csv_dataset(review_encs, centroids, mode = "neg")
+if __name__ == "__main__":
+    make_csv_dataset(review_encs, centroids, mode = "pos")
+    make_csv_dataset(review_encs, centroids, mode = "neg")
