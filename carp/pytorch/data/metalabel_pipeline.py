@@ -12,39 +12,7 @@ from torchtyping import TensorType
 from carp.pytorch.data import *
 from carp.pytorch.model.encoders import BaseEncoder
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowTargetElement
-
-
-def construct_count_label(label_names_tok: List[str]):
-    def count_label(str_rep: str):
-        label_counts = OrderedDict([(key, 0) for key in label_names_tok])
-        l = ast.literal_eval(str_rep)
-        for annotator in l:
-            if len(annotator) < 1:
-                continue
-            for annotation in annotator:
-                ann = annotation[0].replace("_", " ")
-                if ann in label_counts:
-                    label_counts[ann] += 1
-        return label_counts
-
-    return count_label
-
-
-def construct_parse_label(label_names_tok: List[str]):
-    def parse_label(str_rep: str):
-        # print(type(str_rep))
-        labels = []
-        l = ast.literal_eval(str_rep)
-        for annotator in l:
-            if len(annotator) < 1:
-                continue
-            for annotation in annotator:
-                ann = annotation[0].replace("_", " ")
-                if ann in label_names_tok:
-                    labels.append(ann)
-        return max(set(labels), key=labels.count)
-
-    return parse_label
+import os
 
 @register_datapipeline
 class MetalabelDataPipeline(BaseDataPipeline):
@@ -57,12 +25,12 @@ class MetalabelDataPipeline(BaseDataPipeline):
         path: str = "dataset",
     ):
         # We'll load scarecrow by default but in the future I hope to have a very standardized format
-        metalabels_pd = pd.read_csv(path)
-
+        passages = pd.read_csv(os.path.join(path,'dataset.csv'))
+        reviews = torch.load(os.path.join(path,'softmaxed_positives.pt'))
         # get the passages we want to tune on
-        self.passages = list(metalabels_pd["passages"])
+        self.passages = list(passages["passages"])
         # get the target distributions
-        self.reviews = metalabels_pd[[str(i) for i in range(92)]].values.tolist()
+        self.reviews = reviews
 
     @staticmethod
     def tokenizer_factory(_tok: Callable, encoder: BaseEncoder) -> Callable:
