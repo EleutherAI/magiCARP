@@ -59,7 +59,8 @@ class TrainConfig:
     mixed_precision: bool = True  # Use AMP mixed precision
     grad_accum: int = 1
     grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
-    temp: float = 1.0
+    temp: float = 1.0 #Softmax temperature
+    save_folder: str = "default" #Folder to save checkpoints
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

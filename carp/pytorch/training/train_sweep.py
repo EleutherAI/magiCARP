@@ -59,17 +59,17 @@ def get_datasets(config, data_path, random_seed):
         )
 
 
-def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool):
+def save_checkpoint(model, scheduler, opt, iter: int, save_iter: bool, save_folder: str):
     print("SAVING...")
     # Only save extra once every 20
     if save_iter:
         torch.save(
             model.state_dict(),
-            f"./checkpoints/{iter}params.pt",
+            f"./checkpoints/{save_folder}/{iter}params.pt",
         )
-    torch.save(model.state_dict(), "./params.pt")
-    torch.save(scheduler.state_dict(), "./schedule.pt")
-    torch.save(opt.state_dict(), "./opt.pt")
+    torch.save(model.state_dict(), f"./{save_folder}/params.pt")
+    torch.save(scheduler.state_dict(), f"./{save_folder}/schedule.pt")
+    torch.save(opt.state_dict(), f"./{save_folder}/opt.pt")
 
 
 # Dataset assumed to be list of pairs on memory
@@ -123,7 +123,7 @@ def train(
             # Checkpoint model and scheduler
             if iteration % config.checkpoint_interval == 0:
                 save_iter = iteration % (20 * config.checkpoint_interval) == 0
-                save_checkpoint(model, scheduler, opt, iteration, save_iter)
+                save_checkpoint(model, scheduler, opt, iteration, save_iter, config.save_folder)
             # Run on eval set
             if iteration % config.validate_interval == 0:
                 print("VALIDATING...")

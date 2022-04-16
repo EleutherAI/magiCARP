@@ -317,7 +317,7 @@ class CARPCoOpTrainer(BaseTrainer):
 
         # does gradient accumulation
         self.zero_grad()
-        tempered_rev_labels = F.softmax(torch.cat(forward_output["rev_labels"])**self.train_config.temp, dim=-1)
+        tempered_rev_labels = F.softmax(torch.cat(forward_output["rev_labels"])/self.train_config.temp, dim=-1)
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):

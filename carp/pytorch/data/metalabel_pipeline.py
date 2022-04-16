@@ -24,9 +24,9 @@ class MetalabelDataPipeline(BaseDataPipeline):
         dupe_protection: bool = True,
         path: str = "dataset",
     ):
-        # We'll load scarecrow by default but in the future I hope to have a very standardized format
-        passages = pd.read_csv(os.path.join(path,'dataset.csv'))
-        reviews = torch.load(os.path.join(path,'softmaxed_positives.pt'))
+        # Note the dataset should not be softmaxed: this is done in code
+        passages = pd.read_csv(os.path.join(path,'fixed_semantic_filtered/dataset.csv'))
+        reviews = torch.load(os.path.join(path,'fixed_semantic_filtered/dataset_centroid_dists_overall.pt'))
         # get the passages we want to tune on
         self.passages = list(passages["passages"])
         # get the target distributions

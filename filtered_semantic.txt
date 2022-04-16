@@ -1,0 +1,8 @@
+Unable to load review_encoder_CoOp. Randomly initializing and continuing.
+Checkpoint loaded!
+N Parameters: 252446209
+
+Unable to load scheduler and/or optimizer. Continuing.
+EPOCH [0/30]
+Batch Loss: 0.3644111156463623
+SAVING...

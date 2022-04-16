@@ -100,18 +100,18 @@ def get_datasets(config, data_path, random_seed=None):
         )
 
 
-def save_checkpoint(save_fn, scheduler, opt, iter: int, save_iter: bool):
+def save_checkpoint(save_fn, scheduler, opt, iter: int, save_iter: bool, save_folder: bool):
     # this function should be called in the fn_rank_0
     print("SAVING...")
     # Only save extra once every 20
     if save_iter:
-        Path(f"./checkpoints/{iter}/").mkdir(parents=True, exist_ok=True)
-        save_fn(f"./checkpoints/{iter}/")
+        Path(f"./checkpoints/{save_folder}/{iter}/").mkdir(parents=True, exist_ok=True)
+        save_fn(f"./checkpoints/{save_folder}/{iter}/")
 
     Path("./output/").mkdir(parents=True, exist_ok=True)
-    save_fn("./output/")
-    torch.save(scheduler.state_dict(), "./output/schedule.pt")
-    torch.save(opt.state_dict(), "./output/opt.pt")
+    save_fn(f"./output/{save_folder}/")
+    torch.save(scheduler.state_dict(), f"./output/{save_folder}/schedule.pt")
+    torch.save(opt.state_dict(), f"./output/{save_folder}/opt.pt")
 
 
 # Dataset assumed to be list of pairs on memory
@@ -207,9 +207,10 @@ def train(
                 save_iter = (
                     iteration % (20 * trainer.train_config.checkpoint_interval) == 0
                 )
+                save_folder = trainer.train_config.save_folder
                 trainer.before_save()
                 fn_rank_0(
-                    save_checkpoint, save_fn, scheduler, opt, iteration, save_iter
+                    save_checkpoint, save_fn, scheduler, opt, iteration, save_iter, save_folder
                 )
                 trainer.after_save()
             # Run on eval set
@@ -230,8 +231,9 @@ def train(
                     print_rank_0(
                         f"Validation Avg Accuracy: {eval_out['Acc/Validation']}"
                     )
-                    Path(f"./best/{iteration}/").mkdir(parents=True, exist_ok=True)
-                    fn_rank_0(save_fn, f"./best/{iteration}/")
+                    save_folder = trainer.train_config.save_folder
+                    Path(f"./best/{save_folder}/{iteration}/").mkdir(parents=True, exist_ok=True)
+                    fn_rank_0(save_fn, f"./best/{save_folder}/{iteration}/")
                 if trainer.train_config.do_log:
                     fn_rank_0(wandb.log, eval_out)
                 trainer.model.train()
