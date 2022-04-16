@@ -55,8 +55,7 @@ def scatter_with_names(x, y, names, c = None):
 
         pos = sc.get_offsets()[ind["ind"][0]]
         annot.xy = pos
-        text = "{}, {}".format(" ".join(list(map(str,ind["ind"]))), 
-                               " ".join([names[n] for n in ind["ind"]]))
+        text = "{}".format(" ".join([names[n] for n in ind["ind"]]))
         annot.set_text(text)
 
         color = c[ind["ind"][0]]
