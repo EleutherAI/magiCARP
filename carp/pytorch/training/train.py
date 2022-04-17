@@ -108,7 +108,7 @@ def save_checkpoint(save_fn, scheduler, opt, iter: int, save_iter: bool, save_fo
         Path(f"./checkpoints/{save_folder}/{iter}/").mkdir(parents=True, exist_ok=True)
         save_fn(f"./checkpoints/{save_folder}/{iter}/")
 
-    Path("./output/").mkdir(parents=True, exist_ok=True)
+    Path(f"./output/{save_folder}/").mkdir(parents=True, exist_ok=True)
     save_fn(f"./output/{save_folder}/")
     torch.save(scheduler.state_dict(), f"./output/{save_folder}/schedule.pt")
     torch.save(opt.state_dict(), f"./output/{save_folder}/opt.pt")
@@ -233,7 +233,8 @@ def train(
                     )
                     save_folder = trainer.train_config.save_folder
                     Path(f"./best/{save_folder}/{iteration}/").mkdir(parents=True, exist_ok=True)
-                    fn_rank_0(save_fn, f"./best/{save_folder}/{iteration}/")
+                    if trainer.train_config.save_best_val:
+                        fn_rank_0(save_fn, f"./best/{save_folder}/{iteration}/")
                 if trainer.train_config.do_log:
                     fn_rank_0(wandb.log, eval_out)
                 trainer.model.train()
@@ -246,6 +247,11 @@ def train(
                 trainer.model.module.clamp()
             else:
                 trainer.model.clamp()
+
+    if trainer.train_config.save_at_end:
+        fn_rank_0(
+                        save_checkpoint, save_fn, scheduler, opt, iteration, save_iter, save_folder
+                    )
 
 
 def param_count(model):

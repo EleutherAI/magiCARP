@@ -25,9 +25,9 @@ class AlignmentDataPipeline(BaseDataPipeline):
 		path: str = "dataset",
 	):
 		# We'll load scarecrow by default but in the future I hope to have a very standardized format
-		csv = pd.read_csv(path)
+		csv = pd.read_csv(os.path.join(path,'alignment.csv'))
 		self.passages = csv['story'].values.tolist()
-		self.reviews = torch.softmax(torch.tensor(csv.loc[:, csv.columns != 'story'].values.tolist()),dim=-1)
+		self.reviews = torch.tensor(csv.loc[:, csv.columns != 'story'].values.tolist())
 
 
 	@staticmethod

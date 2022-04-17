@@ -7,7 +7,8 @@ model:
   encoder_type: "SumTextEncoder"
   momentum: 0.0
   device: "cuda"
-  labels: ['lawful good', 'neutral good', 'chaotic good', 'lawful neutral', 'true neutral', 'chaotic neutral', 'lawful evil', 'neutral evil', 'chaotic evil']
+  labels: ['chapter', 'scene', 'description', 'character names', 'paragraph', 'dialogue', 'punctuation', 'lines', 'sentences', 'pov', 'character asking question', 'story', 'conversation', 'cut this', 'backstory', 'single character', 'emotional response to story event', 'openings and endings', 'use of action', 'character age', 'humor']
+  loss: 'nll'
 
 train_job:
   n_ctx: 512
@@ -19,7 +20,7 @@ train_job:
   learning_rate_init: 5.0e-5
   learning_rate_target: 0.000006
   log_interval: 25
-  checkpoint_interval: 500
+  checkpoint_interval: 100000
   validate_interval: 30
   use_half: false
   do_log: true
@@ -28,9 +29,12 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "AlignmentDataPipeline"
+  data_pipeline: "MetalabelDataPipeline"
   trainer: "CARPCoOpTrainer"
   gradient_checkpointing: true
   grad_clip: -1.0
   grad_accum: 2
-  temp: 1.26
+  temp: 1 #Softmax temperature
+  save_folder: "nll_smooth"
+  save_best_val: false
+  save_at_end: true

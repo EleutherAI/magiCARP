@@ -20,6 +20,7 @@ class ModelConfig:
     device: str = "cuda:0"
     model_eps: float = 1.0e-4  # Epsilon to add to logits in contrastive loss
     labels: List[str] = None
+    loss: str = 'kl'
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
@@ -61,6 +62,8 @@ class TrainConfig:
     grad_clip: float = -1  # What to clip grad norms to (set to -1 for no clip)
     temp: float = 1.0 #Softmax temperature
     save_folder: str = "default" #Folder to save checkpoints
+    save_best_val: bool = True #If best validation save model
+    save_at_end: bool = False
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

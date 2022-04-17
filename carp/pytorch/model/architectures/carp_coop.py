@@ -209,7 +209,14 @@ class CARPCoOp(BaseModel):
         x = F.normalize(x)
         y = F.normalize(y)
         logits = F.log_softmax(x @ y.T * self.logit_scale.exp(), dim=-1)
-        return F.kl_div(logits.float(), labels.float(), reduction="batchmean")
+        if self.config.loss == 'kl':
+            loss = F.kl_div(logits.float(), labels.float(), reduction="batchmean")
+        elif self.config.loss == 'nll':
+            labels = torch.argmax(labels, dim=-1)
+            loss = F.nll_loss(logits.float(), labels, reduction="mean")
+        else:
+            raise ValueError('Unknown loss')
+        return loss
 
     def eval_step(self, dataset):
         passages = []

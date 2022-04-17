@@ -1,5 +1,6 @@
 import torch
 import pandas as pd
+import torch.nn.functional as F
 
 def test_1():
 	pos = torch.load('dataset_centroid_dists_pos.pt')
@@ -100,6 +101,18 @@ def test_7():
 	print(len(passages))
 	print(data.shape)
 
+def test_8():
+	csv = pd.read_csv('fixed_semantic_filtered/dataset.csv')
+	passages = csv['passages']
+	data = torch.load('fixed_semantic_filtered/dataset_centroid_dists_overall.pt')
+	data = data.type(torch.float32)
+	argmaxes = torch.argmax(data, dim=-1)
+	one_hots = F.one_hot(argmaxes, num_classes=21).type(torch.float32)
+	print(one_hots.shape)
+	print(argmaxes[0])
+	print(one_hots[0])
+
+	torch.save(one_hots, 'thresholded.pt')
 
 if __name__ == "__main__":
-	test_7()
+	test_8()
