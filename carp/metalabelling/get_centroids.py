@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 from carp.pytorch.data import *
-from carp.metalabelling.utils import cull
+from carp.metalabelling.utils import cull, nsphere_centroid 
 
 # Check all prereq files are available
 try:
@@ -18,7 +18,7 @@ except:
     exit()
 
 from carp.metalabelling.sentiment_filtering import filter_on_sentiment
-
+from carp.metalabelling.utils import use_captions
 # for all labels
 # get mean of positive and negative reviews under that label
 # -> ([n_labels, latent_dim], [n_labels, latent_dim]) -> [2, n_labels, latent_dim]
@@ -42,6 +42,9 @@ def label_means(labels, pos_inds, neg_inds, review_encs, mean_strategy = "euclid
 
     if mean_strategy == "euclidean":
         mean_fn = lambda x: x.mean(0)
+    if mean_strategy == "angular":
+        mean_fn = nsphere_centroid
+
     # maybe add cos mean later
 
     for l in range(min_label, max_label + 1):
@@ -58,70 +61,10 @@ def label_means(labels, pos_inds, neg_inds, review_encs, mean_strategy = "euclid
     
     return torch.stack([means, means_pos, means_neg])
 
-
-# If captions for clusters exist, we can incorporate them
-# labels with caption "?" become -1
-# multiple labels with same caption get collapsed to first label
-def use_captions(labels):
-    with open("metalabel_data/user_captions.txt") as file:
-        lines = file.readlines()
-    lines = [line[:-1] for line in lines] # remove the \n at the end
-    kvps = [[i, lines[i]] for i in range(len(lines))]
-
-    # first get rid of the labels that dont have captions (i.e. ?)
-    inds = []
-    for i in range(len(kvps)):
-        if kvps[i][1] == "?":
-            inds.append(i)
-
-    labels[inds] = -1
-    kvps = [[-1 if i in inds else i, kvps[i][1]] for i in range(len(kvps))]
-
-    # now gather labels that have multiple captions
-    ind_groups = []
-    processed = []
-    for i in range(len(kvps)):
-        if kvps[0] == "-1": continue
-        if i in processed: continue
-
-        group = [i]
-
-        # check all preceeding kvps for same caption
-        for j in range(i + 1, len(kvps)):
-            if kvps[j][1] == kvps[i][1]:
-                group.append(j)
-                processed.append(j)
-        ind_groups.append(group)
-
-    # ind groups is now list of groups of indices
-    # a single group represents multiple labels with same caption
-    
-    # now for each group, make labels the same as the first in the group
-    for group in ind_groups:
-        to_set = kvps[group[0]][0] # the label we want to set everything else to
-        for ind in group[1:]:
-            labels[labels == ind] = to_set
-            kvps[ind][0] = to_set
-
-    # want to convert all these labels into [-1, 0, ... n_labels - 1]
-    unique_vals = np.unique(labels)
-    map_ = {unique_vals[i] : i - 1 for i in range(len(unique_vals))}
-    kvps = list(set(map(tuple, kvps))) # remove duplicates
-    kvps = [[map_[kvps[i][0]], kvps[i][1]] for i in range(len(kvps))] # change labels to new range
-    kvps.sort(key = lambda x: x[0]) # sort by label
-
-    captions = [kvp[1] for kvp in kvps] # recover captions for new label set
-
-    labels = np.vectorize(map_.get)(labels) # convert labels to new range
-
-    return labels, captions
-
-
 if __name__ == "__main__":
     labels = clusterer.labels_
     labels, captions = use_captions(labels)
     # this should create a lot of new -1 labels, let's cull based on this
-    print(captions[1:])
 
     cull_inds = cull(labels, -1)
     labels = labels[cull_inds]
@@ -134,7 +77,6 @@ if __name__ == "__main__":
     reviews = [reviews[i] for i in inds] # get the subset that encodings correspond to
 
     neg_inds = filter_on_sentiment(reviews, lambda x: x < 0.5)
-    print(neg_inds)
     np.save("metalabel_data/neg_inds.npy", neg_inds)
 
     pos_inds = np.setdiff1d(
