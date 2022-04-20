@@ -20,6 +20,7 @@ carp/pytorch/checkpointing/convert_to_coop.py
 carp/pytorch/checkpointing/convert_v1_to_v2.py
 carp/pytorch/checkpointing/converters.py
 carp/pytorch/data/__init__.py
+carp/pytorch/data/alignment_pipeline.py
 carp/pytorch/data/metalabel_pipeline.py
 carp/pytorch/data/mlm_pipeline.py
 carp/pytorch/data/scarecrow_pipeline.py

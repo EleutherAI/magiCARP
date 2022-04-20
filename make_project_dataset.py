@@ -3,6 +3,7 @@ from carp.configs import CARPConfig
 from carp.pytorch.model.architectures import *
 import torch
 from tqdm import tqdm
+import pandas as pd
 
 def read_dataset_component(filepath):
 	data = list()
@@ -47,41 +48,43 @@ def encode_reviews(txt_batch):
 CHUNK_SIZE = 100000
 BATCH_SIZE = 500
 
-i = 100000
-encs = None
+i = 0
 while i < len(passages):
+	passage_encs = None
+	crit_encs = None
+	stored_passages = []
+	stored_crits = []
 	print(i)
 	passage_chunk = passages[i:i+CHUNK_SIZE]
-	i += CHUNK_SIZE
-	for j in tqdm(range(CHUNK_SIZE // BATCH_SIZE)):
-		try:
-			batch = passage_chunk[j*BATCH_SIZE: (j+1)*BATCH_SIZE]
-			batch_encs = encode_passages(batch)
-			if encs == None:
-				encs = batch_encs
-			else:
-				encs = torch.cat([encs, batch_encs])
-		except:
-			print("Caught runtime error")
-	torch.save(encs, f'encoded_dataset/passages/passage_encodings_{i}')
-	del passage_chunk
-
-i = 0
-encs = None
-while i < len(crits):
-	print(i)
 	crit_chunk = crits[i:i+CHUNK_SIZE]
 	i += CHUNK_SIZE
 	for j in tqdm(range(CHUNK_SIZE // BATCH_SIZE)):
 		try:
-			batch = crit_chunk[j*BATCH_SIZE: (j+1)*BATCH_SIZE]
-			batch_encs = encode_reviews(batch)
-			if encs == None:
-				encs = batch_encs
+			passage_batch = passage_chunk[j*BATCH_SIZE: (j+1)*BATCH_SIZE]
+			passage_batch_encs = encode_passages(passage_batch)
+			crit_batch = crit_chunk[j*BATCH_SIZE: (j+1)*BATCH_SIZE]
+			crit_batch_encs = encode_reviews(crit_batch)
+
+			if passage_encs == None:
+				passage_encs = passage_batch_encs
 			else:
-				encs = torch.cat([encs, batch_encs])
+				passage_encs = torch.cat([passage_encs, passage_batch_encs])
+
+			if crit_encs == None:
+				crit_encs = crit_batch_encs
+			else:
+				crit_encs = torch.cat([crit_encs, crit_batch_encs])
+
+			stored_passages += passage_batch
+			stored_crits += crit_batch
 		except:
 			print("Caught runtime error")
-	torch.save(encs, f'encoded_dataset/crits/crit_encodings_{i}')
-	del crit_chunk
+	torch.save(passage_encs, f'encoded_dataset/passages/passage_encodings_{i}.pt')
+	torch.save(crit_encs, f'encoded_dataset/crits/crit_encodings_{i}.pt')
+	text_dict = {'passages':stored_passages, 'crits':stored_crits}
+	df = pd.DataFrame(text_dict)
+	df.to_csv(f'encoded_dataset/text/text_{i}.csv', index=False)
+
+	exit()
+
 
