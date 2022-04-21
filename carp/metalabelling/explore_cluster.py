@@ -6,21 +6,22 @@ from scipy.stats import mode
 from hdbscan import HDBSCAN
 from umap import UMAP
 from joblib import dump, load
+import pandas as pd
 
 from carp.pytorch.data import *
 
 # Load encodings
-R = torch.load("metalabel_data/review_encs.pt")
+R = torch.load("encoded_dataset/crits/crit_encodings_100000.pt")
 inds = torch.load("metalabel_data/embedding_inds.pt")
+text_reviews = pd.read_csv('encoded_dataset/text/text_100000.csv')
 reduce_dim = -1 # set to -1 to not reduce dim
 
 # Load dataset
 print("Load Dataset...")
-pipeline = BaseDataPipeline(path="carp/dataset")
-reviews = pipeline.reviews[:-1000] # dont take validation set from training
-reviews = [reviews[i] for i in inds] # get the subset that encodings correspond to
+reviews = text_reviews[:1000]
+R = R[:1000]
 
-# Get HDBSCAN labels 
+# Get HDBSCAN labels
 def get_labels(reduce_dim = 2): # set reduce_dim to -1 for no reduction
     print("Performing UMAP reduction...")
     tform = UMAP(
@@ -31,7 +32,7 @@ def get_labels(reduce_dim = 2): # set reduce_dim to -1 for no reduction
         random_state = 42,
         low_memory = False
     ).fit(R)
-    
+
     z = tform.transform(R)
 
     print("Clustering...")
@@ -46,7 +47,7 @@ def get_labels(reduce_dim = 2): # set reduce_dim to -1 for no reduction
 def cull(labels, to_cull):
     return np.where(labels != to_cull)[0].tolist()
 
-# Print samples from every label 
+# Print samples from every label
 def print_samples(labels, samples_per = 15):
     min_label = labels[labels != -1].min()
     max_label = labels[labels != -1].max()
@@ -80,11 +81,11 @@ def make_captions(labels, samples_per = 15):
 
         # Randomly sample some reviews that match this label
         l_reviews = [reviews[i] for i in where_l]
-        
+
         # print the shortest reviews so its faster t
         kvps = [(len(rev), rev) for rev in l_reviews]
         kvps.sort(key = lambda kvp: kvp[0])
-        l_reviews = [kvp[1] for kvp in kvps] 
+        l_reviews = [kvp[1] for kvp in kvps]
 
         n_samples =  min(len(where_l), samples_per)
         for rev in l_reviews[:n_samples]:
@@ -93,7 +94,7 @@ def make_captions(labels, samples_per = 15):
         caption = input()
         if caption == "-1": break
         f.write(caption + "\n")
-    
+
     f.close()
 
 # Returns metrics of how good clustering was
