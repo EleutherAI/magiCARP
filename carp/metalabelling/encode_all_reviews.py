@@ -38,6 +38,25 @@ def save_encs(encs, path):
     torch.save(encs, path)
 
 def enc_reviews(N_SAMPLES = N_SAMPLES, force_fresh = True, ind_path = "metalabel_data/embedding_inds.pt", enc_path = "metalabel_data/review_encs.pt", random_state = 0):
+    """
+    Encodes given number of reviews and saves embeddings into a file. Also saves indices of reviews that were encoded (with respect to the dataset)
+    Can take a very long time, so saves checkpoints regularly. Automatically tries to load checkpoint by default.
+
+    :param N_SAMPLES: number of reviews to encode
+    :type N_SAMPLES: int
+
+    :param force_fresh: if true, prevents loading of any checkpoints (force a fresh run)
+    :type force_fresh: bool
+
+    :param ind_path: path to which to save a tensor indexing which reviews were encoded
+    :type ind_path: str
+
+    :param enc_path: path to which to save the review embeddings
+    :type enc_path: str
+
+    :param random_state: random seed used to sample reviews from the dataset for encoding
+    :type random_state: int
+    """
     print("Load Model")
     config = CARPConfig.load_yaml("configs/carp_cloob.yml")
     cloob_model = CARPCloob(config.model)
