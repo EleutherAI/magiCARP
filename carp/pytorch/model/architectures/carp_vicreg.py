@@ -7,14 +7,55 @@ from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
 import torch.distributed as dist
 
+
+def off_diagonal(x):
+    """
+    Returns the off-diagonal elements of a 2D tensor.
+    :param x: A 2D tensor.
+    """
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
 patch_typeguard()
 
 
 @typechecked
 @register_architecture
-class CARP(BaseModel):
+class CARPVicreg(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
+
+    def variance_penalty(self, x: TensorType[-1, "latent_dim"], epsilon=1e-4):
+        """
+        Variance penalty for the encodings.
+        :param encodings: The encodings to apply the penalty to.
+        :param epsilon: The epsilon to use for the penalty.
+        :return: The penalty.
+        """
+        # Calculate the variance of one set of encodings. 
+        std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
+        return torch.mean(F.relu(1 - std_x))
+
+    def covariance_penalty(self, x: TensorType[-1, "latent_dim"], epsilon=1e-4):
+        """
+        Covariance penalty for the encodings.
+        :param encodings: The encodings to apply the penalty to.
+        :param epsilon: The epsilon to use for the penalty.
+        """
+        # Calculate the covariance of the encodings
+        cov = torch.matmul(x, x.t()) / x.shape[0]
+        # Calculate the covariance penalty
+        return off_diagonal(cov).pow_(2).sum() / (cov.shape[0] * cov.shape[1])
+
+    def penalty(self, encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
+        """
+        Computes the penalty for the encodings.
+        :param encodings: The encodings to apply the penalty to.
+        :param epsilon: The epsilon to use for the penalty.
+        :return: The penalty.
+        """
+        return self.variance_penalty(encodings) + self.covariance_penalty(encodings)
 
     def forward(
         self,
@@ -54,30 +95,24 @@ class CARP(BaseModel):
             "rev_encs": rev_encs,
             "forward_acc": forward_acc,
         }
+    
 
 
 @register_trainer
-class CARPTrainer(BaseTrainer):
+class CARPVicregTrainer(BaseTrainer):
     def train_deepspeed_step(
         self,
         passages: BatchElement,
         reviews: BatchElement,
         config: TrainConfig,
     ):
-        """
-        Train the model on a single batch using deepspeed.
-        :param passages: The passages to encode.
-        :param reviews: The reviews to encode.
-        :param config: The training configuration.
-        :return: The loss and accuracy of the model on the batch.
-        """
         with self.autocast():
             forward_output = self.model(passages, reviews, config)
 
-        rev_encs, all_rev_encs, rev_offset = self.contrastive_parallel_all_gather(
+        _, all_rev_encs, rev_offset = self.contrastive_parallel_all_gather(
             forward_output["rev_encs"]
         )
-        pass_encs, all_pass_encs, pass_offset = self.contrastive_parallel_all_gather(
+        _, all_pass_encs, pass_offset = self.contrastive_parallel_all_gather(
             forward_output["pass_encs"]
         )
 
@@ -89,7 +124,8 @@ class CARPTrainer(BaseTrainer):
                 pass_tmp[pass_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     torch.cat(pass_tmp), all_rev_encs
-                )
+                ) + self.model.module.penalty(torch.cat(pass_tmp))
+
             self.deepspeed_backwards(loss)
 
         # Encode reviews in microbatches (with grad)
@@ -100,7 +136,8 @@ class CARPTrainer(BaseTrainer):
                 rev_tmp[rev_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     all_pass_encs, torch.cat(rev_tmp)
-                )
+                ) + self.model.module.penalty(torch.cat(rev_tmp))
+
             self.deepspeed_backwards(loss)
 
         # Average the model gradients
@@ -123,13 +160,6 @@ class CARPTrainer(BaseTrainer):
         reviews: BatchElement,
         config: TrainConfig,
     ) -> Dict[str, TensorType[()]]:
-        """
-        Train the model on a single batch.
-        :param passages: The passages to encode.
-        :param reviews: The reviews to encode.
-        :param config: The training configuration.
-        :return: The loss and accuracy of the model on the batch.
-        """
         with self.autocast():
             forward_output = self.model(passages, reviews, config)
 
@@ -143,7 +173,7 @@ class CARPTrainer(BaseTrainer):
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
                 loss = self.model.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                )
+                ) + self.model.module.penalty(torch.cat(pass_tmp))
 
             self.torch_backwards(loss)
 
@@ -155,7 +185,7 @@ class CARPTrainer(BaseTrainer):
                 # grad _just_ at positions in `index`
                 loss = self.model.contrastive_loss(
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                )
+                ) + self.model.module.penalty(torch.cat(rev_tmp))
 
             self.torch_backwards(loss)
 
