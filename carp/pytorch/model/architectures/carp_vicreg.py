@@ -37,16 +37,16 @@ class CARPVicreg(BaseModel):
         std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
         return torch.mean(F.relu(1 - std_x))
 
-    def covariance_penalty(self, x: TensorType[-1, "latent_dim"], epsilon=1e-4):
+    def covariance_penalty(self, x: TensorType[-1, "latent_dim"]):
         """
         Covariance penalty for the encodings.
         :param encodings: The encodings to apply the penalty to.
         :param epsilon: The epsilon to use for the penalty.
         """
         # Calculate the covariance of the encodings
-        cov = torch.matmul(x, x.t()) / x.shape[0]
+        cov = torch.matmul(x.t(), x) / x.shape[0]
         # Calculate the covariance penalty
-        return off_diagonal(cov).pow_(2).sum() / (cov.shape[0] * cov.shape[1])
+        return off_diagonal(cov).pow_(2).sum() / (x.shape[1])
 
     def penalty(self, encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
         """
@@ -55,7 +55,7 @@ class CARPVicreg(BaseModel):
         :param epsilon: The epsilon to use for the penalty.
         :return: The penalty.
         """
-        return self.variance_penalty(encodings) + self.covariance_penalty(encodings)
+        return self.variance_penalty(encodings, epsilon=epsilon) + self.covariance_penalty(encodings)
 
     def forward(
         self,
@@ -173,7 +173,7 @@ class CARPVicregTrainer(BaseTrainer):
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
                 loss = self.model.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                ) + self.model.module.penalty(torch.cat(pass_tmp))
+                ) + self.model.penalty(torch.cat(pass_tmp))
 
             self.torch_backwards(loss)
 
@@ -185,7 +185,7 @@ class CARPVicregTrainer(BaseTrainer):
                 # grad _just_ at positions in `index`
                 loss = self.model.contrastive_loss(
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                ) + self.model.module.penalty(torch.cat(rev_tmp))
+                ) + self.model.penalty(torch.cat(rev_tmp))
 
             self.torch_backwards(loss)
 

@@ -29,6 +29,6 @@ train_job:
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
   trainer: "CARPVicregTrainer"
-  gradient_checkpointing: true
+  gradient_checkpointing: false
   grad_clip: -1.0
   grad_accum: 4
