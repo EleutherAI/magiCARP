@@ -17,86 +17,41 @@ def off_diagonal(x):
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
+
+
+def variance_penalty(x: TensorType[-1, "latent_dim"], epsilon=1e-4):
+    """
+    Variance penalty for the encodings.
+    :param encodings: The encodings to apply the penalty to.
+    :param epsilon: The epsilon to use for the penalty.
+    :return: The penalty.
+    """
+    # Calculate the variance of one set of encodings. 
+    std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
+    return torch.mean(F.relu(1 - std_x))
+
+def covariance_penalty(x: TensorType[-1, "latent_dim"]):
+    """
+    Covariance penalty for the encodings.
+    :param encodings: The encodings to apply the penalty to.
+    :param epsilon: The epsilon to use for the penalty.
+    """
+    # Calculate the covariance of the encodings
+    cov = torch.matmul(x.t(), x) / x.shape[0]
+    # Calculate the covariance penalty
+    return off_diagonal(cov).pow_(2).sum() / (x.shape[1])
+
+def vicreg_penalty(encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
+    """
+    Computes the penalty for the encodings.
+    :param encodings: The encodings to apply the penalty to.
+    :param epsilon: The epsilon to use for the penalty.
+    :return: The penalty.
+    """
+    return variance_penalty(encodings, epsilon=epsilon) + covariance_penalty(encodings)
+
+
 patch_typeguard()
-
-
-@typechecked
-@register_architecture
-class CARPVicreg(BaseModel):
-    def __init__(self, config: ModelConfig):
-        super().__init__(config)
-
-    def variance_penalty(self, x: TensorType[-1, "latent_dim"], epsilon=1e-4):
-        """
-        Variance penalty for the encodings.
-        :param encodings: The encodings to apply the penalty to.
-        :param epsilon: The epsilon to use for the penalty.
-        :return: The penalty.
-        """
-        # Calculate the variance of one set of encodings. 
-        std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
-        return torch.mean(F.relu(1 - std_x))
-
-    def covariance_penalty(self, x: TensorType[-1, "latent_dim"]):
-        """
-        Covariance penalty for the encodings.
-        :param encodings: The encodings to apply the penalty to.
-        :param epsilon: The epsilon to use for the penalty.
-        """
-        # Calculate the covariance of the encodings
-        cov = torch.matmul(x.t(), x) / x.shape[0]
-        # Calculate the covariance penalty
-        return off_diagonal(cov).pow_(2).sum() / (x.shape[1])
-
-    def penalty(self, encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
-        """
-        Computes the penalty for the encodings.
-        :param encodings: The encodings to apply the penalty to.
-        :param epsilon: The epsilon to use for the penalty.
-        :return: The penalty.
-        """
-        return self.variance_penalty(encodings, epsilon=epsilon) + self.covariance_penalty(encodings)
-
-    def forward(
-        self,
-        passages: BatchElement,
-        reviews: BatchElement,
-        config: TrainConfig,
-    ):
-        """
-        Forward pass of the model.
-        :param passages: The passages to encode.
-        :param reviews: The reviews to encode.
-        :param config: The training configuration.
-        :return: The encodings of the passages and reviews w/o gradients.
-        """
-        microbatch_inds = generate_indices(
-            passages.input_ids.shape[0], config.microbatch_size, shuffle=False
-        )
-        # Split tokens and masks into these microbatches
-        pass_mbs: List[BatchElement] = [
-            BatchElement(passages.input_ids[i], passages.mask[i])
-            for i in microbatch_inds
-        ]
-        rev_mbs: List[BatchElement] = [
-            BatchElement(reviews.input_ids[i], reviews.mask[i]) for i in microbatch_inds
-        ]
-
-        # Initially get all encodings without grad
-        pass_encs, rev_encs = self.calculate_embeddings(pass_mbs, rev_mbs)
-
-        # compute accuracy
-        forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
-
-        return {
-            "pass_mbs": pass_mbs,
-            "pass_encs": pass_encs,
-            "rev_mbs": rev_mbs,
-            "rev_encs": rev_encs,
-            "forward_acc": forward_acc,
-        }
-    
-
 
 @register_trainer
 class CARPVicregTrainer(BaseTrainer):
@@ -124,7 +79,7 @@ class CARPVicregTrainer(BaseTrainer):
                 pass_tmp[pass_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     torch.cat(pass_tmp), all_rev_encs
-                ) + self.model.module.penalty(torch.cat(pass_tmp))
+                ) + (self.model.module.penalty(torch.cat(pass_tmp)) / len(forward_output["pass_mbs"]))
 
             self.deepspeed_backwards(loss)
 
@@ -136,7 +91,7 @@ class CARPVicregTrainer(BaseTrainer):
                 rev_tmp[rev_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     all_pass_encs, torch.cat(rev_tmp)
-                ) + self.model.module.penalty(torch.cat(rev_tmp))
+                ) + (self.model.module.penalty(torch.cat(rev_tmp)) / len(forward_output["rev_mbs"]))
 
             self.deepspeed_backwards(loss)
 
@@ -165,7 +120,7 @@ class CARPVicregTrainer(BaseTrainer):
 
         # does gradient accumulation
         self.zero_grad()
-
+        vicreg_loss = None
         # Encode passages in microbatches (with grad)
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
@@ -173,9 +128,14 @@ class CARPVicregTrainer(BaseTrainer):
                 pass_tmp[index] = self.model.encode_passages(passage).hidden
                 loss = self.model.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
-                ) + self.model.penalty(torch.cat(pass_tmp))
+                )
+                penalty = vicreg_penalty(torch.cat(pass_tmp)) / len(forward_output["pass_mbs"])
+                if vicreg_loss is None:
+                    vicreg_loss = penalty.detach()
+                else:
+                    vicreg_loss += penalty.detach()
 
-            self.torch_backwards(loss)
+            self.torch_backwards(loss + penalty)
 
         # Encode reviews in microbatches (with grad)
         for index, review in enumerate(forward_output["rev_mbs"]):
@@ -185,9 +145,11 @@ class CARPVicregTrainer(BaseTrainer):
                 # grad _just_ at positions in `index`
                 loss = self.model.contrastive_loss(
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                ) + self.model.penalty(torch.cat(rev_tmp))
+                )                
+                penalty = vicreg_penalty(torch.cat(rev_tmp)) / len(forward_output["rev_mbs"])
+                vicreg_loss += penalty.detach()
 
-            self.torch_backwards(loss)
+            self.torch_backwards(loss + penalty)
 
         # Average the model gradients
         self.average_gradients()
@@ -200,6 +162,7 @@ class CARPVicregTrainer(BaseTrainer):
 
         return {
             "Loss/Train": loss,
+            "Loss/Vicreg": vicreg_loss,
             "Acc/Forward": forward_output["forward_acc"],
             "Model/logit_scale": self.model.logit_scale.sum(),
         }

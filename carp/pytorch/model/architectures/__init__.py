@@ -277,8 +277,6 @@ from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_shared_encoder import (
     CARPSharedEncoder,
 )
-from carp.pytorch.model.architectures.carp_vicreg import CARPVicreg
-
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]

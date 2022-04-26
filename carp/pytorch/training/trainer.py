@@ -285,7 +285,7 @@ class BaseTrainer(object):
         return tokenizer(passage_encoder)
 
 from carp.pytorch.model.architectures.carp_filip import CARPSimRefactorTrainer
-
+from carp.pytorch.model.architectures.carp_vicreg import CARPVicregTrainer
 # from carp.pytorch.model.architectures.carp import CARPTrainer
 # from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
 # from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer
