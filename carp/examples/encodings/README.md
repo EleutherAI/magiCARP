@@ -6,4 +6,4 @@ Note that both scripts use checkpoints in case of crashes or interruptions. In o
 i.e.  
 python -m carp.examples.encodings.encode_reviews FRESH
   
-Also, keep in mind that because of how saving works, the generated encoding tensor may contain many rows of zero vectors at its end. Code using the encodings must deal with these accordingly.
+Also, keep in mind that because of how saving works, the generated encoding tensor may contain many rows of zero vectors at its end. Code using the encodings must deal with these accordingly. It is also in float16, so a casting to float32 is reccomended when doing any computations downstream with the generated encodings.
