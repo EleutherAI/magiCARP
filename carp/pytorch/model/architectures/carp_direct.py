@@ -31,7 +31,7 @@ class CARPDirect(BaseModel):
                 self.latent_dim = latent_dim
             
             def forward(self, x):
-                return x[:self.latent_dim]
+                return x[:,:self.latent_dim]
         
         self.pass_projector = GenericProjector(self.latent_dim)
         self.rev_projector = GenericProjector(self.latent_dim)
