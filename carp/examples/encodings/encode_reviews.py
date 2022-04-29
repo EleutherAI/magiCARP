@@ -7,11 +7,13 @@ import sys
 from typing import Iterable
 
 from carp.configs import CARPConfig
-from carp.pytorch.model.architectures import *
+from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures import BaseModel
 from carp.pytorch.data import *
 
 from carp.examples.encodings.util import load_encs, save_encs, chunk
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def enc_reviews(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVERY : int,
     model : BaseModel,
@@ -89,8 +91,8 @@ def enc_reviews(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVER
     # encode a single batch of txt (list of strings) with review encoder
     def encode(txt_batch):
         tok_out = tokenize(txt_batch)
-        x = tok_out["input_ids"]
-        mask = tok_out["attention_mask"]
+        x = tok_out["input_ids"].to(device)
+        mask = tok_out["attention_mask"].to(device)
         enc_input = BatchElement(x, mask)
 
         with torch.no_grad():
@@ -122,6 +124,7 @@ def enc_reviews(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVER
     save()
 
 if __name__ == "__main__":
+    # Decide whether or not to do fresh run from command line
     if len(sys.argv) >= 2:
         if sys.argv[1] == "FRESH" or sys.argv[1] == "fresh":
             force_fresh = True
@@ -131,13 +134,14 @@ if __name__ == "__main__":
     # Use CARP Large by default
     print("Load Model...")
     config = CARPConfig.load_yaml("configs/carp_l.yml")
-    model = CARP(config)
-    model.load("checkpoints/CARP_L")
+    model = CARP(config.model)
+    model.load("checkpoints/CARP_L/")
+    model = model.to(device)
 
     # And the Story-Critique dataset
     pipeline = BaseDataPipeline(path="carp/dataset")
 
     enc_reviews(N_SAMPLES = 10000, force_fresh = force_fresh,
         CHUNK_SIZE = 256, SAVE_EVERY = 5, model = model,
-        txt_data = pipeline.reviews, N_CTX = 512, random_state = 0)
+        txt_data = pipeline.reviews, N_CTX = 512, random_state = 0
     )
