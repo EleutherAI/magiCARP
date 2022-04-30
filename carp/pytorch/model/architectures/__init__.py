@@ -279,7 +279,6 @@ from carp.pytorch.model.architectures.carp_shared_encoder import (
 )
 from carp.pytorch.model.architectures.carp_direct import CARPDirect
 
-
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
 
