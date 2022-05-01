@@ -52,7 +52,7 @@ class TrainConfig:
     validation_size: int = 1000  # Size of the validation set
     use_half: bool = False  # Use half precision (LEGACY)
     use_bucket: bool = False  # Used for LEGACY data pipelines
-    opt_eps: float = 1e-4  # Epsilon for optimizer
+    opt_eps: float = 1e-8  # Epsilon for optimizer
     weight_decay: float = 0  # WD for optimizer
     gradient_checkpointing: bool = False  # Pytorch gradient checkpointing
     gradient_averaging: bool = False  # Average the gradients after accumulation

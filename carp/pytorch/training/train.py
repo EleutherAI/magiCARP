@@ -142,9 +142,9 @@ def train(
 
     else:
         opt = torch.optim.AdamW(
-            make_param_groups(model, trainer.train_config.weight_decay),
+            model.parameters(),
             lr=LEARNING_RATE_INIT,
-            betas=(0.9,0.95),
+            betas=(0.9, 0.99),
             eps=trainer.train_config.opt_eps,
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))

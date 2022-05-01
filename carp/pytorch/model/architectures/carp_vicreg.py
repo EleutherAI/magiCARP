@@ -26,8 +26,12 @@ def variance_penalty(x: TensorType[-1, "latent_dim"], epsilon=1e-4):
     :param epsilon: The epsilon to use for the penalty.
     :return: The penalty.
     """
+    # subtract mean
+    x_mean = torch.mean(x, dim=0)
+    x_ = x - x_mean
+
     # Calculate the variance of one set of encodings. 
-    std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
+    std_x = torch.sqrt(torch.var(x_, dim=0) + epsilon)
     return torch.mean(F.relu(1 - std_x))
 
 def covariance_penalty(x: TensorType[-1, "latent_dim"]):
@@ -36,10 +40,15 @@ def covariance_penalty(x: TensorType[-1, "latent_dim"]):
     :param encodings: The encodings to apply the penalty to.
     :param epsilon: The epsilon to use for the penalty.
     """
+
+    # subtract mean
+    x_mean = torch.mean(x, dim=0)
+    x_ = x - x_mean
+
     # Calculate the covariance of the encodings
-    cov = torch.matmul(x.t(), x) / x.shape[0]
+    cov = torch.matmul(x_.t(), x_) / x_.shape[0]
     # Calculate the covariance penalty
-    return off_diagonal(cov).pow_(2).sum() / (x.shape[1])
+    return off_diagonal(cov).pow_(2).sum() / (x_.shape[1])
 
 def vicreg_penalty(encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
     """
@@ -164,5 +173,6 @@ class CARPVicregTrainer(BaseTrainer):
             "Loss/Train": loss,
             "Loss/Vicreg": vicreg_loss,
             "Acc/Forward": forward_output["forward_acc"],
+            "Acc/Top_5_Forward": forward_output["top_5_Acc"],
             "Model/logit_scale": self.model.logit_scale.sum(),
         }
