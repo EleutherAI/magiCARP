@@ -1,31 +1,36 @@
-import torch
-import numpy as np
-from torch.nn.functional import normalize
-
 import math
 import sys
 from typing import Iterable
 
-from carp.configs import CARPConfig
-from carp.pytorch.model.architectures.carp import CARP
-from carp.pytorch.model.architectures import BaseModel
-from carp.pytorch.data import *
+import numpy as np
+import torch
+from torch.nn.functional import normalize
 
-from carp.examples.encodings.util import load_encs, save_encs, chunk
+from carp.configs import CARPConfig
+from carp.examples.encodings.util import chunk, load_encs, save_encs
+from carp.pytorch.data import *
+from carp.pytorch.model.architectures import BaseModel
+from carp.pytorch.model.architectures.carp import CARP
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVERY : int,
-    model : BaseModel,
-    txt_data : Iterable[str],
-    N_CTX : int = 512,
-    ind_path : str = "carp/examples/encodings/pass_embedding_inds.pt",
-    enc_path : str = "carp/examples/encodings/passage_encs.pt",
-    random_state : int = 0):
+
+def enc_passages(
+    N_SAMPLES: int,
+    force_fresh: bool,
+    CHUNK_SIZE: int,
+    SAVE_EVERY: int,
+    model: BaseModel,
+    txt_data: Iterable[str],
+    N_CTX: int = 512,
+    ind_path: str = "carp/examples/encodings/pass_embedding_inds.pt",
+    enc_path: str = "carp/examples/encodings/passage_encs.pt",
+    random_state: int = 0,
+):
     """
     Encodes given number of passages and saves embeddings into a file. Also saves indices of passages that were encoded (with respect to the dataset)
     Can take a very long time, so saves checkpoints regularly. Automatically tries to load checkpoint by default.
-    
+
     :param N_SAMPLES: number of passages to encode
     :type N_SAMPLES: int
 
@@ -61,7 +66,7 @@ def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVE
     LATENT_DIM = model.latent_dim
 
     N = len(txt_data)
-    
+
     # Load a previous run by loading indices then encodings if that works
     try:
         assert not force_fresh
@@ -69,7 +74,7 @@ def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVE
         assert len(inds) == N_SAMPLES
 
         passage_encs = load_encs(enc_path).half()
-        crnt_ind = len(passage_encs) # which passage in inds are we at?
+        crnt_ind = len(passage_encs)  # which passage in inds are we at?
     except:
         # generate indices of the passages we will use
         torch.manual_seed(random_state)
@@ -85,7 +90,7 @@ def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVE
         ind_chunks = chunk(inds, CHUNK_SIZE)
     else:
         ind_chunks = [inds]
-    
+
     tokenize = model.passage_encoder.call_tokenizer
 
     # encode a single batch of txt (list of strings) with passage encoder
@@ -99,11 +104,11 @@ def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVE
             encs = model.encode_passages(enc_input).hidden
         encs = encs.cpu().half()
         return encs
-    
+
     # save the encodings so far
     def save():
         save_encs(passage_encs, enc_path)
-    
+
     # iterate through chunks
     while crnt_ind < N_SAMPLES:
         which_chunk = crnt_ind // CHUNK_SIZE
@@ -114,14 +119,15 @@ def enc_passages(N_SAMPLES : int, force_fresh : bool, CHUNK_SIZE : int, SAVE_EVE
         enc_batch = encode(passage_batch)
 
         passage_encs = torch.cat([passage_encs, enc_batch])
-        
+
         if which_chunk % SAVE_EVERY == 0:
             print("Progress: [{}/{}]".format(crnt_ind, N_SAMPLES))
             save()
-        
+
         crnt_ind += len(inds)
-    
+
     save()
+
 
 if __name__ == "__main__":
     # Decide whether or not to do fresh run from command line
@@ -141,7 +147,13 @@ if __name__ == "__main__":
     # And the Story-Critique dataset
     pipeline = BaseDataPipeline(path="carp/dataset")
 
-    enc_passages(N_SAMPLES = 10000, force_fresh = force_fresh,
-        CHUNK_SIZE = 256, SAVE_EVERY = 5, model = model,
-        txt_data = pipeline.passages, N_CTX = 512, random_state = 0
+    enc_passages(
+        N_SAMPLES=10000,
+        force_fresh=force_fresh,
+        CHUNK_SIZE=256,
+        SAVE_EVERY=5,
+        model=model,
+        txt_data=pipeline.passages,
+        N_CTX=512,
+        random_state=0,
     )

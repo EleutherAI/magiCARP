@@ -10,8 +10,8 @@ from numpy.random import choice
 from torchtyping import TensorType
 
 from carp.pytorch.data import *
-from carp.pytorch.model.encoders import BaseEncoder
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowTargetElement
+from carp.pytorch.model.encoders import BaseEncoder
 
 
 def construct_count_label(label_names_tok: List[str]):
@@ -45,6 +45,7 @@ def construct_parse_label(label_names_tok: List[str]):
         return max(set(labels), key=labels.count)
 
     return parse_label
+
 
 @register_datapipeline
 class MetalabelDataPipeline(BaseDataPipeline):

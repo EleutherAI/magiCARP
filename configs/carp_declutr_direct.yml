@@ -1,8 +1,8 @@
 model:
-  latent_dim: 2048
+  latent_dim: 600 # 70% of roberta-large d_model
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "haisongzhang/roberta-tiny-cased"
+  model_path: "johngiorgi/declutr-base"
   model_arch: "roberta"
   encoder_type: "SumTextEncoder"
   momentum: 0.0
@@ -12,10 +12,10 @@ train_job:
   n_ctx: 512
   epochs: 10
   batch_size: 2048
-  microbatch_size: 128
+  microbatch_size: 32
   lr_ramp_steps: 100
   lr_decay_steps: 3366
-  weight_decay: 1.0e-6
+  weight_decay: 0.1
   learning_rate_init: 1.0e-4
   learning_rate_target: 0.000006
   log_interval: 2
@@ -29,7 +29,7 @@ train_job:
   dupe_protection: true
   hard_dupe_protection: false
   data_pipeline: "BaseDataPipeline"
-  trainer: "CARPTrainer"
-  gradient_checkpointing: false
+  trainer: "CARPVicregTrainer"
+  gradient_checkpointing: true
   grad_clip: -1.0
   grad_accum: 1

@@ -20,10 +20,12 @@ from carp.pytorch.scalability_utils import (
     print_rank_0,
 )
 from carp.pytorch.training.trainer import get_trainer
-from carp.pytorch.training.utils import print_available_configs
+from carp.pytorch.training.utils import (
+    make_param_groups,
+    print_available_configs,
+)
 from carp.util import get_scheduling_func
 
-from carp.pytorch.training.utils import make_param_groups
 
 def get_arguments():
     parser = ArgumentParser()
@@ -60,8 +62,11 @@ def sanity_check(args, config):
 
 
 def get_model(
-    config: CARPConfig, load_checkpoint: bool, model_type: str = "CARP", ckpt_path=None,
-    multi_gpu: bool = False
+    config: CARPConfig,
+    load_checkpoint: bool,
+    model_type: str = "CARP",
+    ckpt_path=None,
+    multi_gpu: bool = False,
 ):
     model = get_architecture(model_type)(config.model)
     if load_checkpoint:
@@ -144,7 +149,7 @@ def train(
         opt = torch.optim.AdamW(
             make_param_groups(model, trainer.train_config.weight_decay),
             lr=LEARNING_RATE_INIT,
-            betas=(0.9,0.95),
+            betas=(0.9, 0.99),
             eps=trainer.train_config.opt_eps,
         )
         scheduler = LambdaLR(opt, get_scheduling_func(trainer.train_config))
@@ -176,7 +181,9 @@ def train(
 
     for epoch in range(trainer.train_config.epochs):
         trainer.on_epoch_start()
-        train_data = trainer.construct_dataloader(dataset, tokenizer, multi_gpus, is_train=True)
+        train_data = trainer.construct_dataloader(
+            dataset, tokenizer, multi_gpus, is_train=True
+        )
 
         for passages, reviews in train_data:
             timer.hit()
@@ -217,8 +224,10 @@ def train(
                 print_rank_0("VALIDATING...")
                 trainer.model.eval()
                 trainer.before_validate_step()
-                #TODO: Make less slow
-                eval_data = trainer.construct_dataloader(evalset, tokenizer, multi_gpus, is_train=False)
+                # TODO: Make less slow
+                eval_data = trainer.construct_dataloader(
+                    evalset, tokenizer, multi_gpus, is_train=False
+                )
 
                 eval_out = trainer.eval_step(eval_data)
                 trainer.after_validate_step()
@@ -281,7 +290,9 @@ if __name__ == "__main__":
             init_process_group(backend="nccl")
             torch.cuda.set_device(torch.distributed.get_rank())
 
-        model = get_model(config, args.load_checkpoint, args.type, args.ckpt_path, multi_gpus)
+        model = get_model(
+            config, args.load_checkpoint, args.type, args.ckpt_path, multi_gpus
+        )
         print_rank_0("N Parameters: " + str(param_count(model)))
 
         # Logging stuff

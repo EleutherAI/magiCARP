@@ -6,6 +6,7 @@ from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
 import torch
+import torch.distributed as dist
 from catalyst.data import DistributedSamplerWrapper
 from torch import no_grad
 from torch.cuda.amp import autocast
@@ -16,7 +17,6 @@ from carp.configs import TrainConfig
 from carp.pytorch.data import BaseDataPipeline, get_datapipeline
 from carp.pytorch.data.utils.data_util import chunkBatchElement
 from carp.pytorch.model.encoders import BaseEncoder
-import torch.distributed as dist
 
 # specifies a dictionary of architectures
 _TRAINERS: Dict[str, any] = {}  # registry
@@ -216,8 +216,15 @@ class BaseTrainer(object):
                 val_acc = self.model.compute_accuracy(
                     torch.cat(pass_emb), torch.cat(rev_emb)
                 )
+                top_5_acc = self.model.compute_top_k_accuracy(
+                    torch.cat(pass_emb), torch.cat(rev_emb)
+                )
 
-        return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}
+        return {
+            "Loss/Validation": val_loss.item(),
+            "Acc/Validation": val_acc.item(),
+            "Acc/Top_5_Validation": top_5_acc,
+        }
 
     # if the child class does not override a trigger, just ignore it
     # TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though
@@ -256,6 +263,16 @@ class BaseTrainer(object):
         multi_gpus: bool,
         is_train: bool,
     ) -> DataLoader:
+        """
+        Constructs the dataloader for the given dataset.
+        Args:
+            dataset: The dataset to construct the dataloader for
+            tokenizer: The tokenizer to use for the dataset
+            multi_gpus: Whether to use multiple GPUs
+            is_train: Whether to construct the dataloader for training or validation
+        Returns:
+            DataLoader: The constructed dataloader
+        """
         sampler = RandomSampler(dataset)
 
         if multi_gpus is True:
@@ -273,6 +290,13 @@ class BaseTrainer(object):
         )
 
     def construct_tokenizer(self, passage_encoder: BaseEncoder) -> Callable:
+        """
+        Constructs the tokenizer for the given passage encoder.
+        Args:
+            passage_encoder: The passage encoder to construct the tokenizer for
+        Returns:
+            Callable: The constructed tokenizer
+        """
         call_tokenizer = passage_encoder.call_tokenizer
         tokenizer_factory = get_datapipeline(
             self.train_config.data_pipeline
@@ -284,8 +308,10 @@ class BaseTrainer(object):
         )
         return tokenizer(passage_encoder)
 
+
 from carp.pytorch.model.architectures.carp_filip import CARPSimRefactorTrainer
 from carp.pytorch.model.architectures.carp_vicreg import CARPVicregTrainer
+
 # from carp.pytorch.model.architectures.carp import CARPTrainer
 # from carp.pytorch.model.architectures.carp_cloob import CARPCloobTrainer
 # from carp.pytorch.model.architectures.carp_coop import CARPCoOpTrainer

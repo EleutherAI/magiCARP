@@ -4,6 +4,7 @@ import sys
 from abc import abstractmethod
 from typing import Dict, Iterable, Tuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn, no_grad
@@ -109,6 +110,11 @@ class BaseModel(nn.Module):
 
     # saves the model to the output directory. saved in chunks so that config can be swapped later
     def save(self, path: str):
+        """
+        Saves the model to the output directory.
+        Args:
+            path: directory to save to
+        """
         self.attempt_save(self.passage_encoder.model, path, "passage_encoder.pt")
         self.attempt_save(self.review_encoder.model, path, "review_encoder.pt")
 
@@ -121,6 +127,11 @@ class BaseModel(nn.Module):
 
     # must be run after initialize
     def load(self, path: str):
+        """
+        Loads the model from the output directory.
+        Args:
+            path: directory to load from
+        """
         self.passage_encoder.model = self.attempt_load(path, "passage_encoder.pt")
         self.review_encoder.model = self.attempt_load(path, "review_encoder.pt")
 
@@ -133,17 +144,57 @@ class BaseModel(nn.Module):
         self,
         x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"],
-        normalize: bool = False,
     ):
+        """
+        Computes the accuracy of the model on a batch of data.
+        Args:
+            x: batch of data to compute accuracy on
+            y: batch of data to compute accuracy on
+            normalize: whether to normalize the data
+        Returns:
+            accuracy: accuracy of the model on the batch of data
+        """
         with no_grad():
             n = x.shape[0]
-            if normalize:
-                x = F.normalize(x)
-                y = F.normalize(y)
-            logits = x @ y.T * self.logit_scale.exp()
+            logits = self.cosine_sim(x, y) * self.logit_scale.exp()
             labels = torch.arange(n, device=self.config.device)
             acc_i = (torch.argmax(logits, dim=1) == labels).sum()
             acc_t = (torch.argmax(logits, dim=0) == labels).sum()
+        return (acc_i + acc_t) / n / 2
+
+    def compute_top_k_accuracy(
+        self,
+        x: TensorType[-1, "latent_dim"],
+        y: TensorType[-1, "latent_dim"],
+        k: int = 5,
+    ):
+        """
+        Computes the accuracy of the model on a batch of data.
+        Args:
+            x: batch of data to compute accuracy on
+            y: batch of data to compute accuracy on
+            k: number of top predictions to consider
+            normalize: whether to normalize the data
+        Returns:
+            accuracy: accuracy of the model on the ba tch of data
+        """
+        with no_grad():
+            n = x.shape[0]
+            logits = self.cosine_sim(x, y) * self.logit_scale.exp()
+            # the shape of logits is (n, n)
+            labels = range(n)
+
+            # for each example, check if label is in the top k predictions
+            logits_numpy = logits.cpu().numpy()
+
+            idxs_i = np.array(np.argpartition(-logits_numpy, k, axis=1))[:, :k].tolist()
+            zip_i = zip(idxs_i, labels)
+            acc_i = sum(list(map(lambda x: x[1] in x[0], zip_i)))
+
+            # do the same for the other encoder
+            idxs_t = np.array(np.argpartition(-logits_numpy, k, axis=0))[:, :k].tolist()
+            zip_t = zip(idxs_t, labels)
+            acc_t = sum(list(map(lambda x: x[1] in x[0], zip_t)))
         return (acc_i + acc_t) / n / 2
 
     def cosine_sim(
@@ -169,6 +220,14 @@ class BaseModel(nn.Module):
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
     ) -> TensorType[(), float]:
+        """
+        Computes the contrastive loss between two sets of vectors x,y
+        Args:
+            x: Tensor of passage embeddings
+            y: Tensor of review embeddings
+        Returns:
+            Contrastive loss
+        """
 
         n = x.shape[0]
         # small term added to avoid nans in low precision softmax
@@ -187,6 +246,14 @@ class BaseModel(nn.Module):
         return self.passage_encoder.device
 
     def _make_projection_layers(self, config):
+        """
+        Creates the projection layers for the model
+        Args:
+            config: Config object
+        Returns:
+            pass_projector: Projection layer for passage vectors
+            rev_projector: Projection layer for review vectors
+        """
         if config.linear_projection:
             proj_pass = nn.Linear(
                 self.passage_encoder.d_model, self.latent_dim, bias=False
@@ -210,6 +277,16 @@ class BaseModel(nn.Module):
         projector,
         normalize=False,
     ):
+        """
+        Embeds a batch of data using the encoder and projector
+        Args:
+            x: Batch of data to be embedded
+            encoder: Encoder to use to embed the data
+            projector: Projector to use to project the data
+            normalize: Whether to normalize the data
+        Returns:
+            Embedded data
+        """
         x = encoder(x.input_ids.to(self.config.device), x.mask.to(self.config.device))
         x.hidden = projector(x.hidden)
         if normalize:
@@ -251,6 +328,13 @@ class BaseModel(nn.Module):
 # Project encoder output to latent space
 class Projection(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, dropout: float):
+        """
+        Projection layer
+        Args:
+            in_dim: Input dimension
+            out_dim: Output dimension
+            dropout: Dropout rate to use
+        """
         super().__init__()
         self.proj = nn.Linear(in_dim, out_dim)
         self.gelu = nn.GELU()
@@ -261,6 +345,13 @@ class Projection(nn.Module):
     def forward(
         self, x: TensorType["batch_dim", "in_dim"]
     ) -> TensorType["batch_dim", "out_dim"]:
+        """
+        Forward pass
+        Args:
+            x: Input tensor
+        Returns:
+            Projected tensor
+        """
         projected = self.proj(x)
         x = self.gelu(projected)
         x = self.fc(x)
@@ -269,15 +360,16 @@ class Projection(nn.Module):
         return self.layer_norm(x)
 
 
-#from carp.pytorch.model.architectures.carp import CARP
+# from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
+from carp.pytorch.model.architectures.carp_direct import CARPDirect
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_shared_encoder import (
     CARPSharedEncoder,
 )
-from carp.pytorch.model.architectures.carp_direct import CARPDirect
+
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]

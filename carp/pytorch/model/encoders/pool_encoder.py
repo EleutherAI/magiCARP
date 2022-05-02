@@ -133,12 +133,7 @@ class DirectTextEncoder(BaseEncoder):
 
 @register_encoder
 class MeanPoolEncoder(BaseEncoder):
-    def __init__(
-        self,
-        model_path: str,
-        model_arch: str,
-        tokenizer_path: str = None
-    ):
+    def __init__(self, model_path: str, model_arch: str, tokenizer_path: str = None):
         super().__init__(model_path, model_arch, tokenizer_path)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:

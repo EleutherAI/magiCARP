@@ -1,11 +1,12 @@
 from typing import List
 
+import torch.distributed as dist
+
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
 from carp.pytorch.scalability_utils import print_rank_0
 from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
-import torch.distributed as dist
 
 
 def off_diagonal(x):
@@ -18,7 +19,6 @@ def off_diagonal(x):
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 
-
 def variance_penalty(x: TensorType[-1, "latent_dim"], epsilon=1e-4):
     """
     Variance penalty for the encodings.
@@ -26,9 +26,14 @@ def variance_penalty(x: TensorType[-1, "latent_dim"], epsilon=1e-4):
     :param epsilon: The epsilon to use for the penalty.
     :return: The penalty.
     """
-    # Calculate the variance of one set of encodings. 
-    std_x = torch.sqrt(torch.var(x, dim=0) + epsilon)
+    # subtract mean
+    x_mean = torch.mean(x, dim=0)
+    x_ = x - x_mean
+
+    # Calculate the variance of one set of encodings.
+    std_x = torch.sqrt(torch.var(x_, dim=0) + epsilon)
     return torch.mean(F.relu(1 - std_x))
+
 
 def covariance_penalty(x: TensorType[-1, "latent_dim"]):
     """
@@ -36,10 +41,16 @@ def covariance_penalty(x: TensorType[-1, "latent_dim"]):
     :param encodings: The encodings to apply the penalty to.
     :param epsilon: The epsilon to use for the penalty.
     """
+
+    # subtract mean
+    x_mean = torch.mean(x, dim=0)
+    x_ = x - x_mean
+
     # Calculate the covariance of the encodings
-    cov = torch.matmul(x.t(), x) / x.shape[0]
+    cov = torch.matmul(x_.t(), x_) / x_.shape[0]
     # Calculate the covariance penalty
-    return off_diagonal(cov).pow_(2).sum() / (x.shape[1])
+    return off_diagonal(cov).pow_(2).sum() / (x_.shape[1])
+
 
 def vicreg_penalty(encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
     """
@@ -52,6 +63,7 @@ def vicreg_penalty(encodings: TensorType[-1, "latent_dim"], epsilon=1e-4):
 
 
 patch_typeguard()
+
 
 @register_trainer
 class CARPVicregTrainer(BaseTrainer):
@@ -79,7 +91,10 @@ class CARPVicregTrainer(BaseTrainer):
                 pass_tmp[pass_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     torch.cat(pass_tmp), all_rev_encs
-                ) + (self.model.module.penalty(torch.cat(pass_tmp)) / len(forward_output["pass_mbs"]))
+                ) + (
+                    self.model.module.penalty(torch.cat(pass_tmp))
+                    / len(forward_output["pass_mbs"])
+                )
 
             self.deepspeed_backwards(loss)
 
@@ -91,7 +106,10 @@ class CARPVicregTrainer(BaseTrainer):
                 rev_tmp[rev_offset + index] = micro_batch
                 loss = self.model.module.contrastive_loss(
                     all_pass_encs, torch.cat(rev_tmp)
-                ) + (self.model.module.penalty(torch.cat(rev_tmp)) / len(forward_output["rev_mbs"]))
+                ) + (
+                    self.model.module.penalty(torch.cat(rev_tmp))
+                    / len(forward_output["rev_mbs"])
+                )
 
             self.deepspeed_backwards(loss)
 
@@ -129,7 +147,9 @@ class CARPVicregTrainer(BaseTrainer):
                 loss = self.model.contrastive_loss(
                     torch.cat(pass_tmp), torch.cat(forward_output["rev_encs"])
                 )
-                penalty = vicreg_penalty(torch.cat(pass_tmp)) / len(forward_output["pass_mbs"])
+                penalty = vicreg_penalty(torch.cat(pass_tmp)) / len(
+                    forward_output["pass_mbs"]
+                )
                 if vicreg_loss is None:
                     vicreg_loss = penalty.detach()
                 else:
@@ -145,8 +165,10 @@ class CARPVicregTrainer(BaseTrainer):
                 # grad _just_ at positions in `index`
                 loss = self.model.contrastive_loss(
                     torch.cat(forward_output["pass_encs"]), torch.cat(rev_tmp)
-                )                
-                penalty = vicreg_penalty(torch.cat(rev_tmp)) / len(forward_output["rev_mbs"])
+                )
+                penalty = vicreg_penalty(torch.cat(rev_tmp)) / len(
+                    forward_output["rev_mbs"]
+                )
                 vicreg_loss += penalty.detach()
 
             self.torch_backwards(loss + penalty)
@@ -164,5 +186,6 @@ class CARPVicregTrainer(BaseTrainer):
             "Loss/Train": loss,
             "Loss/Vicreg": vicreg_loss,
             "Acc/Forward": forward_output["forward_acc"],
+            "Acc/Top_5_Forward": forward_output["top_5_Acc"],
             "Model/logit_scale": self.model.logit_scale.sum(),
         }

@@ -252,7 +252,9 @@ class SharedMeanPoolEncoder(SharedEncoder):
     def forward(
         self, x, mask=None, inputs_embeds=False, **kwargs
     ) -> TensorType["batch", "embed_dim"]:
-        out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs)
+        out = super().forward(
+            x=x, attention_mask=mask, inputs_embeds=inputs_embeds, **kwargs
+        )
         return BaseEncoderOutput(self.mean_pooling(out, mask))
 
 
@@ -266,7 +268,9 @@ class CausalSharedMeanPoolEncoder(SharedMeanPoolEncoder):
         model: PreTrainedModel = None,
         is_review_encoder: bool = False,
     ):
-        super().__init__(model_path, model_arch, tokenizer_path, model, is_review_encoder)
+        super().__init__(
+            model_path, model_arch, tokenizer_path, model, is_review_encoder
+        )
 
         # add quote token to model and tokenizer
         self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})

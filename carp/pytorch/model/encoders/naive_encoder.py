@@ -14,7 +14,7 @@ from carp.pytorch.model.encoders import (
 
 @register_encoder
 class NaiveTextEncoder(BaseEncoder):
-    #def __init__(self, model_path: str, model_arch: str):
+    # def __init__(self, model_path: str, model_arch: str):
     #    super().__init__(model_path, model_arch)
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
@@ -33,5 +33,7 @@ class NaiveTextEncoder(BaseEncoder):
             x = x["input_ids"]
         out = super().forward(x=x, attention_mask=mask, inputs_embeds=inputs_embeds)
 
-        embedded_token_sequence: TensorType["batch", "N", "embed_dim"] = self.extract_fn(out)
+        embedded_token_sequence: TensorType[
+            "batch", "N", "embed_dim"
+        ] = self.extract_fn(out)
         return BaseEncoderOutput(embedded_token_sequence)
