@@ -115,7 +115,9 @@ class CARPCoOp(BaseModel):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
         self.config = config
-        self.review_encoder_CoOp = PromptLayer(self.review_encoder, labels=config.labels)
+        self.review_encoder_CoOp = PromptLayer(
+            self.review_encoder, labels=config.labels
+        )
 
         # required for CoOp
         self.freeze_encoders()
@@ -263,7 +265,7 @@ class CARPCoOp(BaseModel):
             "pass_encs": pass_encs,
             "rev_encs": rev_encs,
             "forward_acc": forward_acc,
-            "rev_labels": rev_labels
+            "rev_labels": rev_labels,
         }
 
 
@@ -281,7 +283,7 @@ class CARPCoOpTrainer(BaseTrainer):
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
             pass_tmp = forward_output["pass_encs"].copy()
-            #Trainer object does seem to have autocast
+            # Trainer object does seem to have autocast
             with self.autocast():
                 pass_tmp[index] = self.model.module.encode_passages(passage).hidden
 
@@ -317,7 +319,9 @@ class CARPCoOpTrainer(BaseTrainer):
 
         # does gradient accumulation
         self.zero_grad()
-        tempered_rev_labels = F.softmax(torch.cat(forward_output["rev_labels"])**self.train_config.temp, dim=-1)
+        tempered_rev_labels = F.softmax(
+            torch.cat(forward_output["rev_labels"]) ** self.train_config.temp, dim=-1
+        )
 
         # Encode passages in microbatches (with grad) and compute CoOp loss
         for index, passage in enumerate(forward_output["pass_mbs"]):
@@ -363,6 +367,8 @@ class CARPCoOpTrainer(BaseTrainer):
         with no_grad():
             pass_emb, rev_emb = self.model.calculate_embeddings(passages)
             val_loss = self.model.CoOp_loss(torch.cat(pass_emb), rev_emb, rev_labels)
-            val_acc = self.model.compute_accuracy(torch.cat(pass_emb), rev_emb, rev_labels)
+            val_acc = self.model.compute_accuracy(
+                torch.cat(pass_emb), rev_emb, rev_labels
+            )
 
         return {"Loss/Validation": val_loss.item(), "Acc/Validation": val_acc.item()}

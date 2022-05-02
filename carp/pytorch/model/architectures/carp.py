@@ -1,11 +1,12 @@
 from typing import List
 
+import torch.distributed as dist
+
 from carp.configs import ModelConfig
 from carp.pytorch.model.architectures import *
 from carp.pytorch.scalability_utils import print_rank_0
 from carp.pytorch.training.trainer import BaseTrainer, register_trainer
 from carp.util import generate_indices
-import torch.distributed as dist
 
 patch_typeguard()
 
@@ -46,7 +47,9 @@ class CARP(BaseModel):
 
         # compute accuracy
         forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
-        top_k_acc = self.compute_top_k_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
+        top_k_acc = self.compute_top_k_accuracy(
+            torch.cat(pass_encs), torch.cat(rev_encs)
+        )
 
         return {
             "pass_mbs": pass_mbs,

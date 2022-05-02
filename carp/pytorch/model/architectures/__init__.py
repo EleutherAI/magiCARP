@@ -3,8 +3,8 @@ from __future__ import annotations
 import sys
 from abc import abstractmethod
 from typing import Dict, Iterable, Tuple
-import numpy as np
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn, no_grad
@@ -111,8 +111,8 @@ class BaseModel(nn.Module):
     # saves the model to the output directory. saved in chunks so that config can be swapped later
     def save(self, path: str):
         """
-        Saves the model to the output directory.    
-        Args:   
+        Saves the model to the output directory.
+        Args:
             path: directory to save to
         """
         self.attempt_save(self.passage_encoder.model, path, "passage_encoder.pt")
@@ -129,7 +129,7 @@ class BaseModel(nn.Module):
     def load(self, path: str):
         """
         Loads the model from the output directory.
-        Args:   
+        Args:
             path: directory to load from
         """
         self.passage_encoder.model = self.attempt_load(path, "passage_encoder.pt")
@@ -151,7 +151,7 @@ class BaseModel(nn.Module):
             x: batch of data to compute accuracy on
             y: batch of data to compute accuracy on
             normalize: whether to normalize the data
-        Returns:    
+        Returns:
             accuracy: accuracy of the model on the batch of data
         """
         with no_grad():
@@ -161,6 +161,7 @@ class BaseModel(nn.Module):
             acc_i = (torch.argmax(logits, dim=1) == labels).sum()
             acc_t = (torch.argmax(logits, dim=0) == labels).sum()
         return (acc_i + acc_t) / n / 2
+
     def compute_top_k_accuracy(
         self,
         x: TensorType[-1, "latent_dim"],
@@ -195,6 +196,7 @@ class BaseModel(nn.Module):
             zip_t = zip(idxs_t, labels)
             acc_t = sum(list(map(lambda x: x[1] in x[0], zip_t)))
         return (acc_i + acc_t) / n / 2
+
     def cosine_sim(
         self,
         x: TensorType[-1, "latent_dim"],
@@ -223,7 +225,7 @@ class BaseModel(nn.Module):
         Args:
             x: Tensor of passage embeddings
             y: Tensor of review embeddings
-        Returns:    
+        Returns:
             Contrastive loss
         """
 
@@ -347,7 +349,7 @@ class Projection(nn.Module):
         Forward pass
         Args:
             x: Input tensor
-        Returns:    
+        Returns:
             Projected tensor
         """
         projected = self.proj(x)
@@ -358,15 +360,16 @@ class Projection(nn.Module):
         return self.layer_norm(x)
 
 
-#from carp.pytorch.model.architectures.carp import CARP
+# from carp.pytorch.model.architectures.carp import CARP
 from carp.pytorch.model.architectures.carp_cloob import CARPCloob
 from carp.pytorch.model.architectures.carp_coop import CARPCoOp
+from carp.pytorch.model.architectures.carp_direct import CARPDirect
 from carp.pytorch.model.architectures.carp_mlm import CARPMLM
 from carp.pytorch.model.architectures.carp_momentum import CARPMomentum
 from carp.pytorch.model.architectures.carp_shared_encoder import (
     CARPSharedEncoder,
 )
-from carp.pytorch.model.architectures.carp_direct import CARPDirect
+
 
 def get_architecture(name):
     return _ARCHITECTURES[name.lower()]
