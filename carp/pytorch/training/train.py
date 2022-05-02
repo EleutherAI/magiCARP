@@ -142,7 +142,7 @@ def train(
 
     else:
         opt = torch.optim.AdamW(
-            model.parameters(),
+            make_param_groups(model, trainer.train_config.weight_decay),
             lr=LEARNING_RATE_INIT,
             betas=(0.9, 0.99),
             eps=trainer.train_config.opt_eps,

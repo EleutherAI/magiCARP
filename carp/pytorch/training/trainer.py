@@ -223,7 +223,7 @@ class BaseTrainer(object):
         return {
             "Loss/Validation": val_loss.item(),
             "Acc/Validation": val_acc.item(),
-            "Acc/Top_5_Validation": top_5_acc.item(),}
+            "Acc/Top_5_Validation": top_5_acc,}
 
     # if the child class does not override a trigger, just ignore it
     # TODO: We probably need way more kinds of interrupts. I dont see a way to handle this besides hand coding each though
