@@ -1,12 +1,13 @@
 import torch
 import numpy as np
 
-from typing import Iterable
+from typing import Iterable, Callable
 from torchtyping import TensorType
 
 import matplotlib.pyplot as plt
 
-def scatter_with_names(x : np.ndarray, y : np.ndarray, names : Iterable[str], c : Iterable[float] = None):
+def scatter_with_names(x : np.ndarray, y : np.ndarray, names : Iterable[str],
+    c : Iterable[float] = None, cmap : Callable = plt.cm.RdYlGn):
     """
     Creates an interactive scatterplot where user can hover over a point and
     see the corresponding string (i.e. review embeddings as points, reviews as the strings).
@@ -23,10 +24,12 @@ def scatter_with_names(x : np.ndarray, y : np.ndarray, names : Iterable[str], c 
 
     :param c: list of floats between 0 and 1 to use as colors for the points, defaults to making all points black
     :type c: Iterable[float], optional
+
+    :param cmap: Function to map values from [0, 1] to RGBA colors, defaults to plt cmap RdYlGn
+    :type cmap: Callable, optional
     """
     names = np.array(names)
     norm = plt.Normalize(1,4)
-    cmap = plt.cm.RdYlGn
     fig, ax = plt.subplots()
 
     # Some preprocessing on c

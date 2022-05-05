@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
         # Perform UMAP
         print("Fit UMAP...")
-        tform = UMAP(
+        umap_tform = UMAP(
             n_neighbors = 30,
             min_dist = 0.0,
             n_components = 2,
@@ -61,12 +61,12 @@ if __name__ == "__main__":
         ).fit(review_encs)
     
         # Save UMAP transformation
-        joblib.dump(tform, "carp/examples/visualization/umap_tform.joblib")
+        joblib.dump(umap_tform, "carp/examples/visualization/umap_tform.joblib")
     
     # get selected reviews
     review_txt = [pipeline.reviews[i] for i in review_inds]
     review_encs = review_encs.cpu().numpy()
-    review_encs = tform.transform(review_encs)
+    review_encs = umap_tform.transform(review_encs)
 
     x = review_encs[:,0]
     y = review_encs[:,1]
