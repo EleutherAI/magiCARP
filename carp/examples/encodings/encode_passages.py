@@ -131,6 +131,7 @@ def enc_passages(
 
 if __name__ == "__main__":
     # Decide whether or not to do fresh run from command line
+    force_fresh = False
     if len(sys.argv) >= 2:
         if sys.argv[1] == "FRESH" or sys.argv[1] == "fresh":
             force_fresh = True
