@@ -40,7 +40,7 @@ if __name__ == "__main__":
         print("Generate Encodings...")
         enc_reviews(
             N_SAMPLES = 10000,
-            force_fresh = False,
+            force_fresh = True,
             CHUNK_SIZE = 256,
             SAVE_EVERY = 5,
             model = model,
