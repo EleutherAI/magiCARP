@@ -73,7 +73,7 @@ class CARPDirect(BaseModel):
             "rev_mbs": rev_mbs,
             "rev_encs": rev_encs,
             "forward_acc": forward_acc,
-            "top_5_Acc": top_k_acc,
+            "top_k_acc": top_k_acc,
         }
 
     # Override base save just to skip projectors
