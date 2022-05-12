@@ -9,7 +9,7 @@ from umap import UMAP
 import joblib
 
 from carp.pytorch.data import *
-from carp.pytorch.model.architectures.carp import CARP
+from carp.pytorch.model.architectures.carp_direct import CARPDirect
 from carp.configs import CARPConfig
 from carp.examples.magiplots.sentiment import extract_sentiment
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         # Use CARP Large by default
         print("Load Model...")
         config = CARPConfig.load_yaml("configs/carp_declutr.yml")
-        model = CARP(config.model)
+        model = CARPDirect(config.model)
         model.load("checkpoints/CARP_DECLUTR/")
         model = model.to(device)
 
