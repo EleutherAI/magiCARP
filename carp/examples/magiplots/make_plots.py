@@ -14,7 +14,6 @@ from carp.configs import CARPConfig
 from carp.examples.magiplots.sentiment import extract_sentiment
 
 from carp.examples.encodings.encode_reviews import enc_reviews
-from carp.examples.visualization.vis_util import scatter_with_names
 
 import matplotlib.pyplot as plt
 
