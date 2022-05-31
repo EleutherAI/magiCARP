@@ -18,20 +18,20 @@ class PromptLayer(nn.Module):
     def __init__(
         self,
         encoder: BaseEncoder,
-        labels: List[str] = None,
+        labels: List[str],
         n_ctx: int = 10,
-        ctx_dim: int = 768,
+        ctx_dim: int = 1024,
     ):
         super().__init__()
-        if labels is None:
-            labels = [
-                "Off-prompt",
-                "Grammar Usage",
-                "Needs Google",
-                "Incoherent",
-                "Technical Jargon",
-                "Redundant",
-            ]
+        #if labels is None:
+        #    labels = [
+        #        "Off-prompt",
+        #        "Grammar Usage",
+        #        "Needs Google",
+        #        "Incoherent",
+        #        "Technical Jargon",
+        #        "Redundant",
+        #    ]
 
         self.labels = labels
         self.n_labels = len(labels)

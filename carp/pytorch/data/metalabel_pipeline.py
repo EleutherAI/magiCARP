@@ -25,8 +25,8 @@ class MetalabelDataPipeline(BaseDataPipeline):
         path: str = "dataset",
     ):
         # Note the dataset should not be softmaxed: this is done in code
-        passages = pd.read_csv(os.path.join(path,'fixed_semantic_filtered/dataset.csv'))
-        reviews = torch.load(os.path.join(path,'fixed_semantic_filtered/dataset_centroid_dists_overall.pt'))
+        passages = pd.read_csv(os.path.join(path,'curated_passages.csv'))
+        reviews = torch.load(os.path.join(path,'curated_data.pt'))
         # get the passages we want to tune on
         self.passages = list(passages["passages"])
         # get the target distributions

@@ -1,6 +1,1 @@
-python -m carp.pytorch.training.train \
-       --data_path="carp/dataset/passage_metalabel_dataset.csv" \
-       --config_path ./configs/large_coop.yml \
-	--type carpcoop
-
-python -m carp.pytorch.training.train        --data_path="carp/dataset/passage_metalabel_dataset.csv"        --config_path ./configs/large_coop.yml --type carpcoop --load_checkpoint --ckpt_path
+python carp/pytorch/training/train.py --data_path=carp_dataset_centroids/metalabel_data --config_path  configs/coop/pseudo_coop.yml --type carpcoop --load_checkpoint --ckpt_path ckpts/CLOOB\ CARP\ Declutr\ B/

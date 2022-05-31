@@ -7,21 +7,20 @@ model:
   encoder_type: "SumTextEncoder"
   momentum: 0.0
   device: "cuda"
-  labels: ['scene', 'description', 'character asking question', 'conversation', 'emotional response to story event', 'openings and endings', 'use of action', 'humor']
-  loss: 'nll'
+  labels: ["Off-prompt", "Grammar_Usage", "Needs_Google", "Incoherent", "Technical_Jargon", "Redundant", "Commonsense", "Encyclopedic", "Bad_Math"]
 
 train_job:
   n_ctx: 512
   epochs: 30
-  batch_size: 256
-  microbatch_size: 256
+  batch_size: 32
+  microbatch_size: 32
   lr_ramp_steps: 50
   lr_decay_steps: 3366
   learning_rate_init: 5.0e-5
   learning_rate_target: 0.000006
   log_interval: 25
-  checkpoint_interval: 250
-  validate_interval: 30
+  checkpoint_interval: 500
+  validate_interval: 15
   use_half: false
   do_log: true
   validation_size: 32
@@ -29,12 +28,8 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "MetalabelDataPipeline"
+  data_pipeline: "ScarecrowDataPipeline"
   trainer: "CARPCoOpTrainer"
   gradient_checkpointing: true
   grad_clip: -1.0
   grad_accum: 2
-  temp: .5 #Softmax temperature
-  save_folder: "thresholded_nll_default"
-  save_best_val: False
-  save_at_end: True
