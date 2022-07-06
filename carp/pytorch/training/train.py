@@ -2,7 +2,6 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import deepspeed
-import madgrad
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import Subset, random_split
