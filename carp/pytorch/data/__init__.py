@@ -47,17 +47,18 @@ class BaseDataPipeline(Dataset):
         dupe_protection: bool = True,
         path: str = "dataset",
     ):
-        dataset = load_from_disk(path)
-        train = dataset["train"]
-        passages = train["story_target"]
-        reviews = train["target_comment"]
+        if path is not None:
+            dataset = load_from_disk(path)
+            train = dataset["train"]
+            self.passages = train["story_target"]
+            self.reviews = train["target_comment"]
         if dupe_protection:
-            size = len(passages)
+            size = len(self.passages)
             i = 0
             while i < size:
-                if len(reviews[i]) <= 7 or len(passages[i]) <= 7:
-                    del passages[i]
-                    del reviews[i]
+                if len(self.reviews[i]) <= 7 or len(self.passages[i]) <= 7:
+                    del self.passages[i]
+                    del self.reviews[i]
                     size -= 1
                 else:
                     i += 1
@@ -120,6 +121,7 @@ class BaseDataPipeline(Dataset):
 from carp.pytorch.data.metalabel_pipeline import MetalabelDataPipeline
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
+from carp.pytorch.data.ai4code_pipeline import AI4CodeDataPipeline
 
 
 def get_datapipeline(name):
