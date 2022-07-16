@@ -62,8 +62,6 @@ class BaseDataPipeline(Dataset):
                     size -= 1
                 else:
                     i += 1
-        self.passages = passages
-        self.reviews = reviews
 
     def __getitem__(self, index: int) -> Tuple[str, str]:
         return self.passages[index], self.reviews[index]

@@ -12,7 +12,7 @@ from carp.pytorch.model.architectures.carp import CARP
 from carp.configs import CARPConfig
 
 from carp.examples.encodings.encode_reviews import enc_reviews
-from carp.examples.visualization.vis_util import scatter_with_names
+from carp.examples.visualization.plot_util import scatter_with_names
 
 if __name__ == "__main__":
     print("Load Dataset...")
@@ -34,18 +34,17 @@ if __name__ == "__main__":
         print("Load Model...")
         config = CARPConfig.load_yaml("configs/carp_l.yml")
         model = CARP(config.model)
-        model.load("checkpoints/CARP_L/")
+        model.load("checkpoints/CARP_L")
         model = model.to(device)
 
         print("Generate Encodings...")
         enc_reviews(
             N_SAMPLES = 10000,
             force_fresh = True,
-            CHUNK_SIZE = 256,
+            CHUNK_SIZE = 128,
             SAVE_EVERY = 5,
             model = model,
             txt_data = pipeline.reviews,
-            N_CTX = 512,
             ind_path = "carp/examples/pseudolabels/embedding_inds.pt",
             enc_path = "carp/examples/pseudolabels/review_encs.pt",
             random_state = 69,
