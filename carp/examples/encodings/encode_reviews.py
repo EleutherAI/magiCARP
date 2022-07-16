@@ -22,7 +22,6 @@ def enc_reviews(
     SAVE_EVERY: int,
     model: BaseModel,
     txt_data: Iterable[str],
-    N_CTX: int = 512,
     ind_path: str = "carp/examples/encodings/rev_embedding_inds.pt",
     enc_path: str = "carp/examples/encodings/review_encs.pt",
     random_state: int = 0,
@@ -49,9 +48,6 @@ def enc_reviews(
     :param txt_data: iterable of reviews to encode
     :type txt_data: Iterable[str]
 
-    :param N_CTX: context size for encoding (specific to model being used)
-    :type N_CTX: int
-
     :param ind_path: path to which to save a tensor indexing which reviews were encoded
     :type ind_path: str
 
@@ -61,8 +57,6 @@ def enc_reviews(
     :param random_state: random seed used to sample reviews from the dataset for encoding
     :type random_state: int
     """
-    N_CTX = 512
-    txt_data = [txt[-N_CTX:] for txt in txt_data]
     LATENT_DIM = model.latent_dim
 
     N = len(txt_data)

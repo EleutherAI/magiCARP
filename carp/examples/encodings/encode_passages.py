@@ -22,7 +22,6 @@ def enc_passages(
     SAVE_EVERY: int,
     model: BaseModel,
     txt_data: Iterable[str],
-    N_CTX: int = 512,
     ind_path: str = "carp/examples/encodings/pass_embedding_inds.pt",
     enc_path: str = "carp/examples/encodings/passage_encs.pt",
     random_state: int = 0,
@@ -61,8 +60,6 @@ def enc_passages(
     :param random_state: random seed used to sample passages from the dataset for encoding
     :type random_state: int
     """
-    N_CTX = 512
-    txt_data = [txt[-N_CTX:] for txt in txt_data]
     LATENT_DIM = model.latent_dim
 
     N = len(txt_data)
