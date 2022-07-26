@@ -201,7 +201,7 @@ class BaseModel(nn.Module):
         self,
         x: TensorType[-1, "latent_dim"],
         y: TensorType[-1, "latent_dim"],
-        normalize=False,
+        normalize=True,
     ):
         """
         Computes the cosine similarity between two sets of vectors x,y
@@ -215,7 +215,7 @@ class BaseModel(nn.Module):
             x = F.normalize(x)
             y = F.normalize(y)
         # small term added to avoid nans in low precision softmax
-        return torch.abs(x @ y.T) + 1e-6
+        return (x @ y.T) + 1e-6
 
     def contrastive_loss(
         self, x: TensorType[-1, "latent_dim"], y: TensorType[-1, "latent_dim"]
