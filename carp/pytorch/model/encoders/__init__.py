@@ -115,11 +115,12 @@ class BaseEncoder(nn.Module):
         return t
 
 
+from carp.pytorch.model.encoders.code_encoder import *
 from carp.pytorch.model.encoders.mlm_encoder import *
 from carp.pytorch.model.encoders.naive_encoder import NaiveTextEncoder
 from carp.pytorch.model.encoders.pool_encoder import *
 from carp.pytorch.model.encoders.shared_encoder import *
-from carp.pytorch.model.encoders.code_encoder import *
+
 
 def get_encoder(name):
     return _ENCODERS[name.lower()]

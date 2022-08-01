@@ -1,23 +1,23 @@
 model:
-  latent_dim: 600 # 70% of roberta-large d_model
+  latent_dim: 600
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "facebook/contriever"
+  model_path: "microsoft/unixcoder-base"
   model_arch: "roberta"
-  encoder_type: "SumTextEncoder"
+  encoder_type: "SumCodeEncoder"
   momentum: 0.0
   device: "cuda"
 
 train_job:
   n_ctx: 512
-  epochs: 10
+  epochs: 20
   batch_size: 2048
-  microbatch_size: 32
+  microbatch_size: 48
   lr_ramp_steps: 100
   lr_decay_steps: 3366
-  weight_decay: 0.1
+  weight_decay: 1.0e-1
   learning_rate_init: 1.0e-4
-  learning_rate_target: 0.000006
+  learning_rate_target: 5.0e-4
   log_interval: 2
   checkpoint_interval: 500
   validate_interval: 50
@@ -28,8 +28,8 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "BaseDataPipeline"
-  trainer: "CARPVicregTrainer"
-  gradient_checkpointing: true
+  data_pipeline: "CodeReviewPipeline"
+  trainer: "CARPTrainer"
+  gradient_checkpointing: false
   grad_clip: -1.0
   grad_accum: 1

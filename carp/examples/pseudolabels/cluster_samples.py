@@ -1,9 +1,9 @@
-import torch
-import numpy as np
 import random
+from typing import Iterable, Tuple
 
 import joblib
-from typing import Iterable, Tuple
+import numpy as np
+import torch
 
 from carp.examples.pseudolabels.clustering_util import cull
 from carp.pytorch.data import *
@@ -17,11 +17,13 @@ if __name__ == "__main__":
         inds = torch.load("carp/examples/pseudolabels/embedding_inds.pt")
         labels = np.load("carp/examples/pseudolabels/cluster_labels.npy")
     except:
-        print("Could not find nessecary objects. Please ensure you have run umap_clustering.py")
+        print(
+            "Could not find nessecary objects. Please ensure you have run umap_clustering.py"
+        )
         exit()
 
     review_txt = [pipeline.reviews[ind] for ind in inds]
-    
+
     # remove error labels
     cull_inds = cull(labels, -1)
     labels = labels[cull_inds]
@@ -30,7 +32,9 @@ if __name__ == "__main__":
     # given a list and indices for that list, returns:
     # - list with those indices removed
     # - list with values from those indices in order
-    def split_list(L : Iterable[any], inds : Iterable[int]) -> Tuple[Iterable[any], Iterable[any]]:
+    def split_list(
+        L: Iterable[any], inds: Iterable[int]
+    ) -> Tuple[Iterable[any], Iterable[any]]:
         L_not = []
         # popping in reverse keeps pops from messing up indexing of earlier elements
         for i in reversed(inds):
@@ -42,12 +46,12 @@ if __name__ == "__main__":
     # assumes labels are 0 thru labels.max()
     for i in range(labels.max() + 1):
         # indices of everything to keep
-        cull_inds = cull(labels, i) 
+        cull_inds = cull(labels, i)
         labels = labels[cull_inds]
 
         # [reviews kept after cull, reviews removed by cull]
         reviews_i, review_txt = split_list(review_txt, cull_inds)
-        
+
         # shuffle then print first 10 samples
         random.shuffle(reviews_i)
         print("================")

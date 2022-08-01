@@ -299,7 +299,7 @@ if __name__ == "__main__":
             fn_rank_0(
                 wandb.init,
                 name=args.wandb_run_name,
-                project="CodeCARP_AI4Code",
+                project="CodeCARP",
                 entity="carperai",
                 resume=False,
                 config=config.to_dict(),

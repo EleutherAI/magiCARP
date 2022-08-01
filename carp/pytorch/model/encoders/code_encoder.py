@@ -25,10 +25,9 @@ class SumCodeEncoder(BaseEncoder):
         # add quote token to model and tokenizer
         strs_list = ["[START]", "[END]"]
         for idx in range(10):
-            strs_list.append("[PLACEHOLDER-"+str(idx)+"]")
+            strs_list.append("[PLACEHOLDER-" + str(idx) + "]")
         self.tokenizer.add_tokens(strs_list)
         self.model.resize_token_embeddings(len(self.tokenizer))
-
 
     def preprocess(self, string_batch: Iterable[str]) -> Iterable[str]:
         return string_batch
@@ -45,7 +44,7 @@ class SumCodeEncoder(BaseEncoder):
             x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
-            
+
         x = x[:, :512]
         mask = mask[:, :512]
 

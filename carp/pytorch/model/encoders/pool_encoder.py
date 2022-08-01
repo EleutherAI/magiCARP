@@ -33,7 +33,7 @@ class SumTextEncoder(BaseEncoder):
             x = self.call_tokenizer(x)
             mask = x["attention_mask"]
             x = x["input_ids"]
-            
+
         x = x[:, :512]
         mask = mask[:, :512]
 
