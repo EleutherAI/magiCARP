@@ -147,6 +147,9 @@ class CARPCloob(BaseModel):
 
         # compute accuracy
         forward_acc = self.compute_accuracy(torch.cat(pass_encs), torch.cat(rev_encs))
+        top_k_acc = self.compute_top_k_accuracy(
+            torch.cat(pass_encs), torch.cat(rev_encs)
+        )
 
         return {
             "pass_mbs": pass_mbs,
@@ -154,6 +157,7 @@ class CARPCloob(BaseModel):
             "rev_mbs": rev_mbs,
             "rev_encs": rev_encs,
             "forward_acc": forward_acc,
+            "top_k_acc": top_k_acc,
         }
 
 
