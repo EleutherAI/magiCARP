@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
+import bitsandbytes as bnb
 import deepspeed
 import torch
 from torch.optim.lr_scheduler import LambdaLR
@@ -145,7 +146,7 @@ def train(
         scheduler = LambdaLR(opt.optimizer, get_scheduling_func(trainer.train_config))
 
     else:
-        opt = torch.optim.AdamW(
+        opt = bnb.optim.Adam8bit(
             make_param_groups(model, trainer.train_config.weight_decay),
             lr=LEARNING_RATE_INIT,
             betas=(0.9, 0.99),

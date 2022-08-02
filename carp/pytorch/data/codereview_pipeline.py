@@ -1,4 +1,5 @@
 import json
+import random
 import re
 import sys
 from dataclasses import dataclass
@@ -93,11 +94,14 @@ class CodeReviewPipeline(BaseDataPipeline):
         # fetch passage
         passage = self.passages[index]
 
-        # take a random (max) 600 word span of passage
+        # take a random (max) 1200 word span of passage
         passage_split = passage.split()
-        start = int(len(passage_split) * np.random.rand())
-        end = min(int(start + 600 * np.random.rand()), len(passage_split))
-        passage = " ".join(passage_split[start:end])
+        if len(passage_split) >= 1200:
+            start = min(
+                int(len(passage_split) * np.random.rand()), len(passage_split) - 1200
+            )
+            end = min(int(start + 1200 * np.random.rand()), len(passage_split))
+            passage = " ".join(passage_split[start:end])
 
         # pop from the top and then push to the bottom
         critique = self.reviews[index].pop(0)
