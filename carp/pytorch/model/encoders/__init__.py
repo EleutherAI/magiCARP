@@ -92,6 +92,8 @@ class BaseEncoder(nn.Module):
             self.preprocess(string_batch),
             return_tensors="pt",  # Will they ever _not_ be pytorch tensors?
             padding=True,
+            truncation = True,
+            max_length = self.cfg.max_position_embeddings
         )
 
     def forward(self, inputs_embeds=False, **kwargs):
