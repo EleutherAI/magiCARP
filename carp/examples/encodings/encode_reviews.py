@@ -14,7 +14,6 @@ from carp.pytorch.model.architectures.carp import CARP
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 def enc_reviews(
     N_SAMPLES: int,
     force_fresh: bool,
@@ -22,10 +21,10 @@ def enc_reviews(
     SAVE_EVERY: int,
     model: BaseModel,
     txt_data: Iterable[str],
-    N_CTX: int = 512,
     ind_path: str = "carp/examples/encodings/rev_embedding_inds.pt",
     enc_path: str = "carp/examples/encodings/review_encs.pt",
     random_state: int = 0,
+    tform: Callable = lambda x : x
 ):
     """
     Encodes given number of reviews and saves embeddings into a file. Also saves indices of reviews that were encoded (with respect to the dataset)
@@ -49,9 +48,6 @@ def enc_reviews(
     :param txt_data: iterable of reviews to encode
     :type txt_data: Iterable[str]
 
-    :param N_CTX: context size for encoding (specific to model being used)
-    :type N_CTX: int
-
     :param ind_path: path to which to save a tensor indexing which reviews were encoded
     :type ind_path: str
 
@@ -61,8 +57,7 @@ def enc_reviews(
     :param random_state: random seed used to sample reviews from the dataset for encoding
     :type random_state: int
     """
-    N_CTX = 512
-    txt_data = [txt[-N_CTX:] for txt in txt_data]
+
     LATENT_DIM = model.latent_dim
 
     N = len(txt_data)
@@ -95,6 +90,7 @@ def enc_reviews(
 
     # encode a single batch of txt (list of strings) with review encoder
     def encode(txt_batch):
+        txt_batch = [tform(txt) for txt in txt_batch]
         tok_out = tokenize(txt_batch)
         x = tok_out["input_ids"].to(device)
         mask = tok_out["attention_mask"].to(device)
