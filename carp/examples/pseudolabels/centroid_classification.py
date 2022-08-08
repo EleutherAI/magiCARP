@@ -1,12 +1,11 @@
-import torch
-import torch.nn.functional as F
-import numpy as np
-from umap import UMAP
-
-from torchtyping import TensorType
+import sys
 
 import joblib
-import sys
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torchtyping import TensorType
+from umap import UMAP
 
 from carp.configs import CARPConfig
 from carp.pytorch.data import *
@@ -15,8 +14,8 @@ from carp.pytorch.model.architectures.carp import CARP
 
 
 def generate_centroids(
-        review_encs : TensorType["n", "d"], labels : np.ndarray, umap_tform : UMAP = None
-    ) -> TensorType["m", "d"]:
+    review_encs: TensorType["n", "d"], labels: np.ndarray, umap_tform: UMAP = None
+) -> TensorType["m", "d"]:
     """
     Given reduction transformation, review encodings, and labels, generate centroids per label in reduced space
 
@@ -32,24 +31,29 @@ def generate_centroids(
     :return: Centroids in reduced space, normalized, [m, d] tensor, where m is number of labels and d is either dim of review_encs or 2 if umap_tform is given
     :rtype: torch.tensor
     """
-    if umap_tform is not None: 
+    if umap_tform is not None:
         review_encs = umap_tform.transform(review_encs)
         review_encs = torch.from_numpy(review_encs)
         means = torch.zeros(labels.max(), 2)
     else:
-        means = torch.zeros(labels.max() + 1, review_encs.shape[1]) 
+        means = torch.zeros(labels.max() + 1, review_encs.shape[1])
 
     for i in range(labels.max() + 1):
         inds = np.where(labels == i)[0]
 
         means[i] = review_encs[inds].mean(0)
-    
+
     if umap_tform is None:
-        means = F.normalize(means) # should be points on d-sphere if still in original space
-    
+        means = F.normalize(
+            means
+        )  # should be points on d-sphere if still in original space
+
     return means
 
-def classify_encoding(encoding : TensorType["d"], centroids : TensorType["m", "d"], metric : str = "cosine") -> int:
+
+def classify_encoding(
+    encoding: TensorType["d"], centroids: TensorType["m", "d"], metric: str = "cosine"
+) -> int:
     """
     Given encoding and centroids, classify encoding as belonging to one of the clusters the centroids correspond to
 
@@ -69,18 +73,19 @@ def classify_encoding(encoding : TensorType["d"], centroids : TensorType["m", "d
     encoding /= encoding.norm()
 
     if metric == "cosine":
-        sims = centroids @ encoding # -> [m]
+        sims = centroids @ encoding  # -> [m]
         # this is sufficient for cos sim if both are normalized
     elif metric == "euclidean":
-        sqr_dist = encoding[None,:] - centroids # -> [m, d]
-        sqr_dist = sqr_dist ** 2
-        sqr_dist = sqr_dist.sum(1) # -> [m]
-        sims = -1 * sqr_dist # max similarity is minimum sqr distance
+        sqr_dist = encoding[None, :] - centroids  # -> [m, d]
+        sqr_dist = sqr_dist**2
+        sqr_dist = sqr_dist.sum(1)  # -> [m]
+        sims = -1 * sqr_dist  # max similarity is minimum sqr distance
     else:
         print("Warning: Invalid metric")
         return -1
-    
+
     return sims.argmax().item()
+
 
 if __name__ == "__main__":
     use_umap = False
@@ -94,9 +99,11 @@ if __name__ == "__main__":
         umap_tform = joblib.load("carp/examples/pseudolabels/umap_tform.joblib")
         labels = np.load("carp/examples/pseudolabels/cluster_labels.npy")
     except:
-        print("Could not find nessecary objects. Please ensure you have run umap_clustering.py")
+        print(
+            "Could not find nessecary objects. Please ensure you have run umap_clustering.py"
+        )
         exit()
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Use CARP Large by default
@@ -107,7 +114,7 @@ if __name__ == "__main__":
     model = model.to(device)
 
     # encode a single text sample with model
-    def encode(txt, mode): # mode as R or P
+    def encode(txt, mode):  # mode as R or P
         if mode == "P":
             tokenize = model.passage_encoder.call_tokenizer
         elif mode == "R":
@@ -129,7 +136,9 @@ if __name__ == "__main__":
         return enc
 
     print("Getting Centroids...")
-    centroids = generate_centroids(review_encs, labels, umap_tform = umap_tform if use_umap else None)
+    centroids = generate_centroids(
+        review_encs, labels, umap_tform=umap_tform if use_umap else None
+    )
 
     print("Enter P or R for type of text to classify followed by the text, i.e.")
     print("P The quick brown fox jumped over the lazy dog")
@@ -140,12 +149,15 @@ if __name__ == "__main__":
     while True:
         try:
             txt = input()
-            if txt == "exit": break
+            if txt == "exit":
+                break
 
             # split txt into mode and actual string, then encode and classify
             mode, txt = txt[0], txt[2:]
             enc = encode(txt, mode)
-            label = classify_encoding(enc, centroids, "euclidean" if use_umap else "cosine")
+            label = classify_encoding(
+                enc, centroids, "euclidean" if use_umap else "cosine"
+            )
 
             print("Predicted Label: {}".format(label))
 
@@ -153,4 +165,3 @@ if __name__ == "__main__":
             exit()
         except:
             print("Invalid Input")
-

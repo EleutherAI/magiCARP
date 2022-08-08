@@ -116,11 +116,12 @@ class BaseDataPipeline(Dataset):
         return collate
 
 
+from carp.pytorch.data.ai4code_pipeline import AI4CodeDataPipeline
+from carp.pytorch.data.codereview_pipeline import CodeReviewPipeline
 from carp.pytorch.data.metalabel_pipeline import MetalabelDataPipeline
 from carp.pytorch.data.mlm_pipeline import MLMDataPipeline
 from carp.pytorch.data.scarecrow_pipeline import ScarecrowDataPipeline
-from carp.pytorch.data.ai4code_pipeline import AI4CodeDataPipeline
-from carp.pytorch.data.codereview_pipeline import CodeReviewPipeline
+
 
 def get_datapipeline(name):
     return _DATAPIPELINE[name.lower()]

@@ -1,23 +1,24 @@
 model:
-  latent_dim: 600 # 70% of roberta-large d_model
+  latent_dim: 600
   proj_dropout: 0.1
   linear_projection: true
-  model_path: "facebook/contriever"
-  model_arch: "roberta"
-  encoder_type: "SumTextEncoder"
+  model_path: "Muennighoff/SGPT-1.3B-weightedmean-nli-bitfit"
+  model_arch: "neo"
+  tokenizer_path: "gpt2"
+  encoder_type: "CausalMeanPoolCodeEncoder"
   momentum: 0.0
   device: "cuda"
 
 train_job:
-  n_ctx: 512
-  epochs: 10
-  batch_size: 2048
-  microbatch_size: 32
+  n_ctx: 1024
+  epochs: 20
+  batch_size: 1024
+  microbatch_size: 4
   lr_ramp_steps: 100
   lr_decay_steps: 3366
-  weight_decay: 0.1
+  weight_decay: 1.0e-1
   learning_rate_init: 1.0e-4
-  learning_rate_target: 0.000006
+  learning_rate_target: 5.0e-4
   log_interval: 2
   checkpoint_interval: 500
   validate_interval: 50
@@ -28,8 +29,8 @@ train_job:
   use_bucket: false
   dupe_protection: true
   hard_dupe_protection: false
-  data_pipeline: "BaseDataPipeline"
-  trainer: "CARPVicregTrainer"
-  gradient_checkpointing: true
+  data_pipeline: "CodeReviewPipeline"
+  trainer: "CARPTrainer"
+  gradient_checkpointing: false
   grad_clip: -1.0
   grad_accum: 1
