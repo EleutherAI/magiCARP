@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional, Dict
 
 import torch
 from torchtyping import TensorType
@@ -87,13 +87,53 @@ def create_tok(tokenizer: Callable, context_len: int):
 
     return _tok
 
+@dataclass
+class GenericBatchElement:
+    """
+    Base class for any type of batch element. Assumes attributes will always be tensors
+    whose first axis is batch size.
+    """
+    pass
 
 @dataclass
-class BatchElement:
+class BatchElement(GenericBatchElement): # For text
     input_ids: TensorType[-1, "pass_N"]
     mask: TensorType[-1, "pass_N"]
 
+@dataclass
+class ImageBatchElement(GenericBatchElement):
+    input_img : TensorType[-1, "C", "H", "W"]
 
+@dataclass
+class AudioBatchElement(GenericBatchElement):
+    input_wf : TensorType[-1, "N"]
+    mask : TensorType[-1, "N"]
+
+def split_batch_element(data : GenericBatchElement, split_inds : List[List[int]]) -> List[GenericBatchElement]:
+    """
+    Split an arbitrary batch element into a list of batch elements
+
+    :param data: The batch element that will be split into len(split_inds) batch elements
+    :param split_inds: indices w.r.t original data for each item in result list to contain
+    :return: List where i-th element is a batch element containing elements of data indexed by split_inds[i]
+    """
+
+    cls : GenericBatchElement = type(data)
+    fields = data.__dataclass_fields__
+    return [
+        cls(**{field : getattr(data, field)[i] for field in fields}) for i in split_inds
+    ]
+
+def batch_elem_to_dict(data : GenericBatchElement) -> Dict:
+    """
+    Turn batch element into dictionary over its attributes
+    """
+
+    fields = data.__dataclass_fields__
+    return {
+        field : getattr(data, field) for field in fields
+    }
+    
 # Assumes first axis of all tensor attributes in data are the same
 # If no tensor attributes, returns original data object
 def chunkBatchElement(data: BatchElement, chunk_size: int) -> List[BatchElement]:
