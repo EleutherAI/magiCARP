@@ -78,9 +78,6 @@ def filter_empty(passages: List[str], reviews: List[str]) -> None:
 def create_tok(tokenizer: Callable, context_len: int):
     @typechecked
     def _tok(string_batch: Iterable[str]) -> BatchEncoding:
-        for i, _ in enumerate(string_batch):
-            if len(string_batch[i]) > context_len:
-                string_batch[i] = string_batch[i][-context_len:]
         if not isinstance(string_batch, list):
             string_batch = list(string_batch)
         return tokenizer(string_batch)
