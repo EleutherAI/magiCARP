@@ -102,7 +102,7 @@ class BatchElement(GenericBatchElement): # For text
 
 @dataclass
 class ImageBatchElement(GenericBatchElement):
-    input_img : TensorType[-1, "C", "H", "W"]
+    pixel_values : TensorType[-1, "C", "H", "W"]
 
 @dataclass
 class AudioBatchElement(GenericBatchElement):
