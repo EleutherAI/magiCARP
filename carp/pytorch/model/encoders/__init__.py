@@ -39,10 +39,11 @@ def register_encoder(name):
 def extract_neo(output: Dict[str, Any]) -> TensorType["batch", -1, "embed_dim"]:
     return output["hidden_states"][-2]
 
-
 def extract_roberta(output: Tuple) -> TensorType["batch", -1, "embed_dim"]:
     return output[0]
 
+def extract_vit(output : Dict[str, Any]) -> TensorType["batch", "n_patches+1", "embed_dim"]:
+    return output["last_hidden_state"]
 
 Device = Union[str, torch.DeviceObjType]
 
@@ -55,7 +56,7 @@ class BaseEncoderOutput:
 class BaseEncoder(nn.Module):
 
     # For different models, hidden state is returned differently
-    extract_fns = {"neo": extract_neo, "roberta": extract_roberta}
+    extract_fns = {"neo": extract_neo, "roberta": extract_roberta, "vit" : extract_vit}
 
     def __init__(
         self,

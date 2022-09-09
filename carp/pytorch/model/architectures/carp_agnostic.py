@@ -34,7 +34,7 @@ class BaseAgnosticModel(BaseModel):
         enc_type = self.config.encoder_type.split("|")
         model_path = self.config.model_path.split("|")
         model_arch = self.config.model_arch.split("|")
-        tokenizer_path = self.config.model_arch.split("|")
+        tokenizer_path = self.config.model_path.split("|")
 
         pass_enc_class = get_encoder(enc_type[0])
         rev_enc_class = get_encoder(enc_type[1])
