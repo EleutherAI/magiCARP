@@ -186,6 +186,6 @@ class CARPVicregTrainer(BaseTrainer):
             "Loss/Train": loss,
             "Loss/Vicreg": vicreg_loss,
             "Acc/Forward": forward_output["forward_acc"],
-            "Acc/Top_5_Forward": forward_output["top_5_Acc"],
+            "Acc/Top_5_Forward": forward_output["top_k_acc"],
             "Model/logit_scale": self.model.logit_scale.sum(),
         }
